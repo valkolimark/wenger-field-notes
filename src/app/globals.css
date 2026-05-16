@@ -15,6 +15,7 @@
 
   /* --- Motion: subtle, premium (150-250ms ease-out; mount fade is longer) --- */
   --animate-fade-in: fade-in 400ms ease-out both;
+  --animate-fade-in-fast: fade-in 200ms ease-out both;
 }
 
 @keyframes fade-in {
