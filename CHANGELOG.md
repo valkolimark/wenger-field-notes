@@ -6,6 +6,29 @@ Format: `## Cycle N — Title (YYYY-MM-DD)` followed by a short prose summary, t
 
 ---
 
+## Cycle 4 — Visit form & local submissions (2026-05-16)
+
+Replaced the form stub with the full visit form, persisted submissions and debounced drafts to `localStorage`, and built the real My Submissions list + read-only detail. Intentionally local-only — Cycle 5 adds the database.
+
+**Added**
+- `src/lib/submissions.ts` — `VisitFormData` / `Submission` / `Draft` types, all option sets, **SSR-guarded** `localStorage` CRUD, `repIdFromName`, `newSubmissionId` (browser `crypto.randomUUID`, no dep), relative/absolute date helpers
+- Form primitives: `fields.tsx` (label-wrapped native radio/checkbox/text/textarea, ≥44px tap targets, navy selected state), `collapsible-section.tsx` (chevron rotate, smooth 200ms grid-rows transition, default expanded)
+- `components/form/visit-form.tsx` — warm-accented **Priority block** (Visit priority required, enforced with scroll-to + inline error), 5 collapsible sections (Contact/Purchasing/Decision-making/Marketing/Notes) with the exact fields/options specified; "Other contact" enabled only when "Other" is checked; `useReducer` state; debounced (400ms) draft autosave; draft restore w/ "Draft restored — last edited …" + Discard; fixed save bar (Save submission / Save & start another) above the mobile tab bar; ~2s success then route; Back-to-map confirms when there are unsaved changes
+- `components/submissions/` — `useSubmissions` hook (SSR-guarded), `submissions-list.tsx` (per-rep, sorted by date desc, empty state, school/city/date/priority badge/notes preview), `submission-detail.tsx` (read-only, same sectioned layout)
+- Routes: `/submissions/[id]` (read-only detail); friendly "School not found" / "Submission not found" states
+
+**Changed**
+- `/form/[schoolId]`: stub → real form (server resolves school; unknown id → not-found)
+- `/submissions`: Cycle 2 placeholder → real list
+
+**Notes**
+- **No new dependencies** (no form/validation library, per scope; ids via `crypto.randomUUID`)
+- `repId` derived as a kebab-slug of the rep name (rep state has no id until Cycle 6 auth); `repName` denormalized on each submission
+- localStorage schema: submissions array under `wenger.submissions.v1`; per-school drafts under `wenger.draft.${repId}.${schoolId}` (drafts are never listed as submissions; cleared on save)
+- **Data is local to the browser/device — no sync until Cycle 5.** Photos omitted entirely (flagged Cycle 9+); edit/delete on submissions deferred (future cycle)
+- Verification: `npm run build` clean (6 routes), no SSR/hydration/storage errors. The fill→save→list→detail→draft-restore→priority-validation flow is the in-browser portion of the live check
+- Live URL unchanged: https://valkolimark-wenger-field-notes.vercel.app
+
 ## Cycle 3 — School data & interactive map (2026-05-16)
 
 Brought the 47 schools in as static data and rendered them on an interactive, mobile-friendly Leaflet map with search, tier filter, and a tap-to-preview card. Still no DB/auth/AI.

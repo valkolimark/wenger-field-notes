@@ -43,6 +43,29 @@ source addresses; a few ambiguous ones are marked `// TODO: verify coords`.
 Source of record: `docs/California Private School- LA and Architects.docx`.
 The interactive map uses Leaflet with free OpenStreetMap tiles (no API key).
 
+### Visit form & submissions (local-only until Cycle 5)
+
+Reps open a school from the map and fill the visit form at
+`/form/[schoolId]` — a warm-accented **priority block** (Visit priority is
+the only required field) plus collapsible Contact / Purchasing /
+Decision-making / Marketing / Notes sections. As they work, an in-progress
+**draft** auto-saves (debounced). On save, the submission is appended to
+`localStorage` and shows in **My Submissions** (`/submissions`) with a
+read-only detail at `/submissions/[id]`.
+
+`localStorage` schema (see `src/lib/submissions.ts`):
+
+- `wenger.submissions.v1` — JSON array of `Submission` objects
+  (`id`, `schoolId`, `schoolName`, `repId`, `repName`, `visitDate`, plus
+  the `priority` / `contact` / `purchasing` / `decisionMaking` /
+  `marketing` blocks and `notes`)
+- `wenger.draft.${repId}.${schoolId}` — one in-progress draft per
+  school+rep; cleared on successful save, never listed as a submission
+
+**This data lives only in the browser on one device.** Cross-device
+persistence (Neon Postgres) arrives in Cycle 5; real auth in Cycle 6.
+No edit/delete or photo upload yet.
+
 ### Project conventions
 
 See `CLAUDE.md` for the full project rules. Highlights:
