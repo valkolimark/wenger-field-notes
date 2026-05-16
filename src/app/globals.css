@@ -1,26 +1,40 @@
 @import "tailwindcss";
 
+@theme {
+  /* --- Wenger brand palette (CLAUDE.md non-negotiable) --- */
+  --color-brand-navy: #0a3758;
+  --color-brand-navy-dark: #082a45;
+  --color-brand-navy-light: #1a5685;
+  --color-brand-warm: #b8612a;
+  --color-brand-warm-soft: #f5ebe0;
+
+  /* --- Typography: system stack for UI, Georgia serif for display only --- */
+  --font-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto,
+    Helvetica, Arial, sans-serif;
+  --font-display: Georgia, "Times New Roman", serif;
+
+  /* --- Motion: subtle, premium (150-250ms ease-out; mount fade is longer) --- */
+  --animate-fade-in: fade-in 400ms ease-out both;
+}
+
+@keyframes fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
 :root {
   --background: #ffffff;
-  --foreground: #171717;
-}
-
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+  --foreground: #0a3758;
 }
 
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--font-sans);
 }
