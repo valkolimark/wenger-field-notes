@@ -6,6 +6,32 @@ Format: `## Cycle N — Title (YYYY-MM-DD)` followed by a short prose summary, t
 
 ---
 
+## Cycle 3 — School data & interactive map (2026-05-16)
+
+Brought the 47 schools in as static data and rendered them on an interactive, mobile-friendly Leaflet map with search, tier filter, and a tap-to-preview card. Still no DB/auth/AI.
+
+**Added**
+- `src/lib/schools.ts` — 47 schools from the source doc; `Tier` union + `TIER_LABELS`; `School` interface; `enrollment` kept verbatim (often non-numeric); static **hand-derived** coordinates (no runtime geocoding) with `// TODO: verify coords` on the 3 ambiguous entries (Fusion Academy, Turning Point, Oak Park); `schools` exported sorted alphabetically by name
+- Client-only Leaflet map (`next/dynamic` `ssr:false` + a "Loading map…" skeleton); custom **navy `#0A3758` `divIcon`** (no default blue marker); OSM standard tiles with the **required attribution kept**; default view `[34.05,-118.35]` z9
+- Sticky search (case-insensitive name substring) + thumb-friendly tier pill row + live "Showing X of 47 schools" count + search clear-X; clearing filters restores all 47
+- Tap a pin → preview: **bottom sheet on mobile** (map stays visible), **side panel on `md+`**; school name (Georgia serif), address/city, enrollment, tier badge, project activity, navy **"Start visit"**; close via X / tap-outside / Esc
+- `/form/[schoolId]` route stub ("coming in Cycle 4") so the URL structure is in place; lives in `(app)` so it inherits the shell
+- `docs/California Private School- LA and Architects.docx` committed for data provenance
+
+**Changed**
+- `(app)/template.tsx`: switched to an **opacity-only** fade (new `fade-in-soft` keyframe). A lingering CSS `transform` from the prior slide-fade would have re-anchored the `position:fixed` map layer; login's 400ms slide-fade is unchanged
+- `/map` now renders the map screen. The map is a full-bleed layer sized to the gap between the Cycle 2 fixed header/tab bar — **no Cycle 2 files restructured; My Submissions untouched**
+
+**Dependencies (approved, flagged)**
+- `leaflet@1.9.4`, `react-leaflet@5.0.0` (v5 — required for React 19; v4 needs React 18), `@types/leaflet@1.9.21` (dev)
+
+**Notes**
+- **47 schools is authoritative** — the source doc has 47; the spec/CLAUDE.md "49" is an estimate. `CLAUDE.md` was **not** edited (needs explicit approval); the wording mismatch is flagged here for a future CLAUDE.md touch-up
+- Coordinates are best-effort static estimates for pin placement, not survey-grade; 3 carry `// TODO: verify coords`. Shared-address entries (Amerigo↔Bishop Montgomery, Windward Middle↔Windward, Brentwood Lower↔Brentwood East) intentionally overlap — accepted for this cycle
+- Out of scope and not built (possible future ideas): pin clustering, pin-color-by-tier, custom map styles. Source doc's "Architects (Prop 28/LA USD)" note is unused — possible future sales-context feature
+- Verification: `npm run build` clean, no SSR/`window` errors (Leaflet stays client-only), all routes 200. The interactive map (47 pins, filter, tap→preview, Start visit) is the in-browser portion of the live check
+- Live URL unchanged: https://valkolimark-wenger-field-notes.vercel.app
+
 ## Cycle 2 — Branded app shell & navigation (2026-05-15)
 
 Built the persistent in-app shell (fixed navy header + tab bar) that wraps every authenticated screen, with smooth tab navigation between Map and My Submissions placeholders. Still no auth/DB/AI.

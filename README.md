@@ -32,7 +32,16 @@ Create `.env.local` in the project root. Variables required per cycle:
 
 ### Tech stack
 
-Next.js 15 (App Router) · TypeScript · Tailwind CSS v4 · Neon Postgres · Drizzle ORM · NextAuth v5 · Anthropic SDK · Deployed on Vercel.
+Next.js 16 (App Router) · TypeScript · Tailwind CSS v4 · Leaflet + react-leaflet (OpenStreetMap tiles) · lucide-react · Neon Postgres · Drizzle ORM · NextAuth v5 · Anthropic SDK · Deployed on Vercel.
+
+### Data
+
+School data is **static** — no runtime geocoding or external API. The 47
+schools live in `src/lib/schools.ts` (`Tier` union, `TIER_LABELS`, `School`
+interface, `schools` sorted by name). Coordinates are hand-derived from the
+source addresses; a few ambiguous ones are marked `// TODO: verify coords`.
+Source of record: `docs/California Private School- LA and Architects.docx`.
+The interactive map uses Leaflet with free OpenStreetMap tiles (no API key).
 
 ### Project conventions
 
