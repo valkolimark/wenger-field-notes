@@ -2,7 +2,7 @@
 
 A mobile-first sales field app for Wenger Corporation's sales team. Reps capture school visit notes from their phones; admins see the aggregated pipeline and get AI-generated summaries from Claude.
 
-**Live URL:** _(added after Cycle 1 deploy)_
+**Live URL:** https://valkolimark-wenger-field-notes.vercel.app
 
 ---
 
