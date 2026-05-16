@@ -117,9 +117,9 @@ Cycles are numbered. Each has an objective, a scope, and a done-criteria. Cycles
 **Done when:** After selecting a rep on login, user lands in app shell. Can navigate between tabs. Logo and brand styling consistent throughout.
 
 ### Cycle 3 — School data & interactive map
-**Objective:** Bring the 49 schools into the app and render them on an interactive map.
+**Objective:** Bring the 47 schools into the app and render them on an interactive map.
 **Scope:** `lib/schools.ts` data array. Map view with pins (use Leaflet + OpenStreetMap free tiles, OR canvas-based pins if Leaflet adds too much). Search/filter UI. Tap a pin → school detail preview.
-**Done when:** Map shows all 49 schools. Search filters list. Tapping a school opens a preview card with "Start visit" button.
+**Done when:** Map shows all 47 schools. Search filters list. Tapping a school opens a preview card with "Start visit" button.
 
 ### Cycle 4 — Visit form
 **Objective:** Build the full visit form with the priority block at top.
