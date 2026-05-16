@@ -15,7 +15,12 @@
 
   /* --- Motion: subtle, premium (150-250ms ease-out; mount fade is longer) --- */
   --animate-fade-in: fade-in 400ms ease-out both;
-  --animate-fade-in-fast: fade-in 200ms ease-out both;
+  /* Opacity-only: used for in-app route transitions so it never leaves a
+     lingering `transform` (which would re-anchor fixed children). */
+  --animate-fade-in-soft: fade-in-soft 200ms ease-out both;
+  /* Preview card: bottom sheet (mobile) / side panel (desktop) */
+  --animate-sheet-up: sheet-up 220ms ease-out both;
+  --animate-sheet-in: sheet-in 220ms ease-out both;
 }
 
 @keyframes fade-in {
@@ -26,6 +31,33 @@
   to {
     opacity: 1;
     transform: translateY(0);
+  }
+}
+
+@keyframes fade-in-soft {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes sheet-up {
+  from {
+    transform: translateY(100%);
+  }
+  to {
+    transform: translateY(0);
+  }
+}
+
+@keyframes sheet-in {
+  from {
+    transform: translateX(100%);
+  }
+  to {
+    transform: translateX(0);
   }
 }
 

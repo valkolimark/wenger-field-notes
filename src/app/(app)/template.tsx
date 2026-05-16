@@ -7,5 +7,5 @@ export default function AppTemplate({
 }: {
   children: React.ReactNode;
 }) {
-  return <div className="animate-fade-in-fast">{children}</div>;
+  return <div className="animate-fade-in-soft">{children}</div>;
 }
