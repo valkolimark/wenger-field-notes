@@ -13,7 +13,6 @@ import {
   createEmptyForm,
   repIdFromName,
   newSubmissionId,
-  appendSubmission,
   loadDraft,
   saveDraft,
   clearDraft,
@@ -78,6 +77,7 @@ export function VisitForm({ school }: { school: School }) {
   const [draftAt, setDraftAt] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
 
   const priorityRef = useRef<HTMLDivElement>(null);
   const baselineRef = useRef<string>(JSON.stringify(createEmptyForm()));
@@ -128,7 +128,7 @@ export function VisitForm({ school }: { school: School }) {
     });
   }
 
-  function save(then: "list" | "map") {
+  async function save(then: "list" | "map") {
     if (!form.priority.visitPriority) {
       setPriorityError("Please set visit priority");
       priorityRef.current?.scrollIntoView({
@@ -138,6 +138,7 @@ export function VisitForm({ school }: { school: School }) {
       return;
     }
     if (!rep || saving) return;
+    setSaveError(null);
     setSaving(true);
 
     const submission: Submission = {
@@ -149,7 +150,22 @@ export function VisitForm({ school }: { school: School }) {
       visitDate: new Date().toISOString(),
       ...form,
     };
-    appendSubmission(submission);
+
+    try {
+      const res = await fetch("/api/submissions", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(submission),
+      });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    } catch {
+      // Keep the form filled; the rep can retry.
+      setSaving(false);
+      setSaveError("Couldn't save — check your connection and try again.");
+      return;
+    }
+
+    // Only now is it safe to drop the local draft.
     clearDraft(repId, school.id);
     setSaved(true);
     setTimeout(
@@ -413,13 +429,21 @@ export function VisitForm({ school }: { school: School }) {
       {/* Fixed save bar — full-bleed, above the mobile tab bar */}
       <div className="fixed inset-x-0 bottom-[calc(3.5rem_+_env(safe-area-inset-bottom))] z-20 border-t border-black/8 bg-white/95 px-5 py-3 backdrop-blur-md md:bottom-0">
         <div className="mx-auto flex w-full max-w-3xl flex-col items-center gap-2">
+          {saveError && (
+            <p
+              role="alert"
+              className="w-full text-center text-xs font-medium text-red-600"
+            >
+              {saveError}
+            </p>
+          )}
           <button
             type="button"
             onClick={() => save("list")}
             disabled={saving}
             className="flex h-12 w-full items-center justify-center rounded-xl bg-brand-navy px-5 text-sm font-semibold text-white transition-colors duration-200 hover:bg-brand-navy-light focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-navy disabled:opacity-60"
           >
-            Save submission
+            {saving ? "Saving…" : "Save submission"}
           </button>
           <button
             type="button"
