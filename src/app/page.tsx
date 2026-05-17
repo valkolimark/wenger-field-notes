@@ -1,19 +1,36 @@
 "use client";
 
-import Image from "next/image";
+import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { useRep } from "@/components/shell/rep-context";
-
-// Cycle 1: hardcoded. Real auth + allowlist arrives in Cycle 6.
-const REPS = ["Brooke", "Jackie", "Rahki", "Chad", "Tam", "Linda"] as const;
+import Image from "next/image";
+import { signIn } from "next-auth/react";
 
 export default function LoginPage() {
   const router = useRouter();
-  const { setRep } = useRep();
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const [submitting, setSubmitting] = useState(false);
 
-  function choose(name: string) {
-    setRep(name);
+  async function onSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    setError(null);
+    setSubmitting(true);
+    const res = await signIn("credentials", {
+      email: email.trim().toLowerCase(),
+      password,
+      redirect: false,
+    });
+    if (!res || res.error) {
+      setSubmitting(false);
+      setError(
+        "Couldn't sign you in — check your email and password and try again.",
+      );
+      return;
+    }
+    // middleware sends first-login users to /set-password.
     router.push("/map");
+    router.refresh();
   }
 
   return (
@@ -27,25 +44,48 @@ export default function LoginPage() {
           priority
           className="h-20 w-auto"
         />
-
         <h1 className="mt-5 font-display text-lg italic text-white">
           Field Notes
         </h1>
+        <p className="mt-2 text-sm text-white/70">Sign in to continue</p>
 
-        <p className="mt-2 text-sm text-white/70">Pick your name to begin</p>
+        <form onSubmit={onSubmit} className="mt-10 w-full space-y-3">
+          <input
+            type="email"
+            inputMode="email"
+            autoComplete="username"
+            required
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            placeholder="Email"
+            aria-label="Email"
+            className="h-12 w-full rounded-xl border border-white/20 bg-white/10 px-4 text-base text-white outline-none backdrop-blur-md placeholder:text-white/50 focus-visible:border-white/40 focus-visible:ring-2 focus-visible:ring-white/20"
+          />
+          <input
+            type="password"
+            autoComplete="current-password"
+            required
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            placeholder="Password"
+            aria-label="Password"
+            className="h-12 w-full rounded-xl border border-white/20 bg-white/10 px-4 text-base text-white outline-none backdrop-blur-md placeholder:text-white/50 focus-visible:border-white/40 focus-visible:ring-2 focus-visible:ring-white/20"
+          />
 
-        <div className="mt-10 grid w-full grid-cols-2 gap-3 sm:grid-cols-3">
-          {REPS.map((name) => (
-            <button
-              key={name}
-              type="button"
-              onClick={() => choose(name)}
-              className="min-h-[56px] rounded-xl border border-white/20 bg-white/10 px-4 py-4 text-base font-medium text-white backdrop-blur-md transition-all duration-200 hover:-translate-y-0.5 hover:border-white/30 hover:bg-white/20 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white active:translate-y-0"
-            >
-              {name}
-            </button>
-          ))}
-        </div>
+          {error && (
+            <p role="alert" className="text-sm font-medium text-red-300">
+              {error}
+            </p>
+          )}
+
+          <button
+            type="submit"
+            disabled={submitting}
+            className="flex h-12 w-full items-center justify-center rounded-xl bg-white px-5 text-base font-semibold text-brand-navy transition-all duration-200 hover:bg-white/90 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white disabled:opacity-60"
+          >
+            {submitting ? "Signing in…" : "Sign in"}
+          </button>
+        </form>
       </div>
     </main>
   );

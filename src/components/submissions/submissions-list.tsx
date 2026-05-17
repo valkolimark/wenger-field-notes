@@ -2,9 +2,8 @@
 
 import Link from "next/link";
 import { Map as MapIcon, ChevronRight } from "lucide-react";
-import { useRep } from "@/components/shell/rep-context";
 import { schools } from "@/lib/schools";
-import { repIdFromName, formatVisitDate } from "@/lib/submissions";
+import { formatVisitDate } from "@/lib/submissions";
 import { useSubmissions } from "./use-submissions";
 
 const CITY_BY_ID = new Map(schools.map((s) => [s.id, s.city]));
@@ -31,9 +30,7 @@ function SkeletonCards() {
 }
 
 export function SubmissionsList() {
-  const { rep } = useRep();
-  const repId = rep ? repIdFromName(rep) : "";
-  const { submissions, loading, error, refresh } = useSubmissions(repId);
+  const { submissions, loading, error, refresh } = useSubmissions();
 
   return (
     <section>

@@ -1,19 +1,13 @@
 "use client";
 
 import Image from "next/image";
-import { useRouter } from "next/navigation";
 import { LogOut } from "lucide-react";
-import { useRep } from "./rep-context";
+import { useSession, signOut } from "next-auth/react";
 
 export function AppHeader() {
-  const router = useRouter();
-  const { rep, logout } = useRep();
-  const initial = rep?.charAt(0).toUpperCase() ?? "?";
-
-  function handleLogout() {
-    logout();
-    router.push("/");
-  }
+  const { data: session } = useSession();
+  const name = session?.user?.name || session?.user?.email || "";
+  const initial = name ? name.charAt(0).toUpperCase() : "?";
 
   return (
     <header className="fixed inset-x-0 top-0 z-30 bg-brand-navy pt-[env(safe-area-inset-top)]">
@@ -33,14 +27,14 @@ export function AppHeader() {
               {initial}
             </span>
             <span className="hidden text-sm font-medium text-white sm:inline">
-              {rep}
+              {name}
             </span>
           </div>
 
           <button
             type="button"
-            onClick={handleLogout}
-            aria-label="Switch rep (log out)"
+            onClick={() => signOut({ callbackUrl: "/" })}
+            aria-label="Log out"
             className="grid h-11 w-11 place-items-center rounded-full text-white/80 transition-colors duration-200 hover:bg-white/10 hover:text-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white"
           >
             <LogOut size={18} aria-hidden />

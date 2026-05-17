@@ -4,14 +4,13 @@ import { useEffect, useReducer, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { ArrowLeft, Check } from "lucide-react";
 import type { School } from "@/lib/schools";
-import { useRep } from "@/components/shell/rep-context";
+import { useSession } from "next-auth/react";
 import { CollapsibleSection } from "./collapsible-section";
 import { RadioGroup, CheckboxGroup, TextField, TextArea } from "./fields";
 import {
   type VisitFormData,
   type Submission,
   createEmptyForm,
-  repIdFromName,
   newSubmissionId,
   loadDraft,
   saveDraft,
@@ -69,8 +68,9 @@ function reducer(state: VisitFormData, action: Action): VisitFormData {
 
 export function VisitForm({ school }: { school: School }) {
   const router = useRouter();
-  const { rep } = useRep();
-  const repId = rep ? repIdFromName(rep) : "";
+  const { data: session } = useSession();
+  const repId = session?.user?.repId ?? "";
+  const repName = session?.user?.name ?? session?.user?.email ?? "";
 
   const [form, dispatch] = useReducer(reducer, undefined, createEmptyForm);
   const [priorityError, setPriorityError] = useState<string>("");
@@ -137,7 +137,7 @@ export function VisitForm({ school }: { school: School }) {
       });
       return;
     }
-    if (!rep || saving) return;
+    if (!repId || saving) return;
     setSaveError(null);
     setSaving(true);
 
@@ -146,7 +146,7 @@ export function VisitForm({ school }: { school: School }) {
       schoolId: school.id,
       schoolName: school.name,
       repId,
-      repName: rep,
+      repName,
       visitDate: new Date().toISOString(),
       ...form,
     };

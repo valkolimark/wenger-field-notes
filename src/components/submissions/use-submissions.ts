@@ -4,49 +4,36 @@ import { useCallback, useEffect, useState } from "react";
 import type { Submission } from "@/lib/submissions";
 
 /**
- * Cycle 5: submissions now come from Neon via /api/submissions. Same
- * exported name/shape as the Cycle 4 hook (consuming pages unchanged),
- * with `error` + `refresh` added. Revalidates on mount and window focus;
- * on error keeps last-known data and surfaces a human message.
+ * Cycle 6: the API scopes by the authenticated session (rep sees own,
+ * admin sees all) — the client no longer passes a repId. Revalidates on
+ * mount and window focus; keeps last-known data on error.
  */
-export function useSubmissions(repId: string) {
+export function useSubmissions() {
   const [submissions, setSubmissions] = useState<Submission[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   const refresh = useCallback(async () => {
-    if (!repId) {
-      setSubmissions([]);
-      setLoading(false);
-      return;
-    }
     try {
       setError(null);
-      const res = await fetch(
-        `/api/submissions?repId=${encodeURIComponent(repId)}`,
-        { cache: "no-store" },
-      );
+      const res = await fetch("/api/submissions", { cache: "no-store" });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data = (await res.json()) as { submissions?: Submission[] };
       setSubmissions(
         Array.isArray(data.submissions) ? data.submissions : [],
       );
     } catch {
-      // Keep last-known data; surface a human message.
       setError("Couldn't load submissions — pull to refresh.");
     } finally {
       setLoading(false);
     }
-  }, [repId]);
+  }, []);
 
-  // Initial load (shows the skeleton via `loading`).
   useEffect(() => {
     setLoading(true);
     void refresh();
   }, [refresh]);
 
-  // Revalidate when the tab regains focus (no skeleton flash — `loading`
-  // stays false so we silently refresh in the background).
   useEffect(() => {
     function onFocus() {
       void refresh();

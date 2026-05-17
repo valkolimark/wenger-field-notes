@@ -53,9 +53,12 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
     },
     session({ session, token }) {
       if (session.user) {
-        session.user.repId = token.repId;
-        session.user.role = token.role;
-        session.user.mustChangePassword = token.mustChangePassword;
+        // next-auth/jwt augmentation is flaky under the beta; token claims
+        // read back as `unknown`, so assert the shapes we set in `jwt`.
+        session.user.repId = token.repId as string;
+        session.user.role = token.role as Role;
+        session.user.mustChangePassword =
+          token.mustChangePassword as boolean;
       }
       return session;
     },

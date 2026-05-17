@@ -1,29 +1,11 @@
 "use client";
 
-import { useEffect } from "react";
-import { useRouter } from "next/navigation";
-import { useRep } from "./rep-context";
 import { AppHeader } from "./app-header";
 import { TabBar } from "./tab-bar";
 
+// Cycle 6: route protection moved to middleware.ts (NextAuth). The shell
+// no longer gates on a localStorage rep — it just renders the chrome.
 export function AppShell({ children }: { children: React.ReactNode }) {
-  const router = useRouter();
-  const { rep, ready } = useRep();
-
-  // No rep (e.g. deep-link or logout): bounce back to login.
-  useEffect(() => {
-    if (ready && !rep) router.replace("/");
-  }, [ready, rep, router]);
-
-  // Avoid flicker while reading localStorage / during the redirect.
-  if (!ready || !rep) {
-    return (
-      <div className="flex min-h-screen flex-1 items-center justify-center bg-linear-to-b from-brand-navy-dark to-brand-navy-light">
-        <p className="text-sm text-white/70">Loading…</p>
-      </div>
-    );
-  }
-
   return (
     <>
       <AppHeader />
