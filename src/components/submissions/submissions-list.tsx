@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { Map as MapIcon, ChevronRight } from "lucide-react";
+import { useSession } from "next-auth/react";
 import { schools } from "@/lib/schools";
 import { formatVisitDate } from "@/lib/submissions";
 import { useSubmissions } from "./use-submissions";
@@ -30,7 +31,17 @@ function SkeletonCards() {
 }
 
 export function SubmissionsList() {
+  const { data: session } = useSession();
   const { submissions, loading, error, refresh } = useSubmissions();
+
+  // Cycle 6: /submissions is the rep-facing tab. The API returns all rows
+  // for admins (for Cycle 7's /admin), so here we still show each user
+  // only their own — the admin "see all" view ships in Cycle 7.
+  const repId = session?.user?.repId;
+  const visible =
+    session?.user?.role === "admin" && repId
+      ? submissions.filter((s) => s.repId === repId)
+      : submissions;
 
   return (
     <section>
@@ -51,7 +62,7 @@ export function SubmissionsList() {
 
       {loading ? (
         <SkeletonCards />
-      ) : submissions.length === 0 ? (
+      ) : visible.length === 0 ? (
         <div className="mt-10 flex flex-col items-center text-center">
           <p className="text-sm text-brand-navy/60">
             No visits logged yet — head to the map to log your first.
@@ -66,7 +77,7 @@ export function SubmissionsList() {
         </div>
       ) : (
         <ul className="mt-5 space-y-3">
-          {submissions.map((s) => (
+          {visible.map((s) => (
             <li key={s.id}>
               <Link
                 href={`/submissions/${s.id}`}
