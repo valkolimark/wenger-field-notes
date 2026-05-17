@@ -132,14 +132,19 @@ Cycles are numbered. Each has an objective, a scope, and a done-criteria. Cycles
 **Done when:** Submissions saved on one device appear on another. Data survives browser refresh.
 
 ### Cycle 6 — Real authentication
-**Objective:** Replace the rep selector with NextAuth email magic links.
-**Scope:** NextAuth v5 setup, Resend for emails, allowlist of 6 rep emails + admin emails, session handling, protected routes.
-**Done when:** Only allowed emails can log in. Each rep sees only their own submissions. Admins see all.
+**Objective:** Replace the rep selector with real authentication. Users log in with email + password.
+**Scope:** NextAuth v5 with Credentials provider, JWT sessions, `users` table in Neon with bcrypt-hashed passwords seeded from `lib/allowlist.ts` using a generic bootstrap password (`SEED_PASSWORD` env var), force-change-on-first-login flow, session handling, protected routes via middleware, server-side scoping of `/api/submissions` (reps see own; admins see all). No email sending; no Resend.
+**Done when:** Only allowed users can log in with email + password. First login forces password change before granting full session. Each rep sees only their own submissions. Admins see all. The rep selector is gone.
+
+### Cycle 6.5 — User self-service profile edit
+**Objective:** Logged-in users can edit their own profile.
+**Scope:** `/account` page with form to update name, email, and password (current-password confirmation required for password change). One API route. No admin-facing UI.
+**Done when:** Any logged-in user can change their own name, email, and password. Changes persist in Neon and reflect in the session immediately.
 
 ### Cycle 7 — Admin dashboard
-**Objective:** Build the admin view with submissions list, filters, and CSV export.
-**Scope:** `/admin` route, gated to admin users. Stats row, filter by rep, expandable submission detail, CSV export button.
-**Done when:** Admin can view, filter, and export all team submissions.
+**Objective:** Build the admin view: submissions list, filters, CSV export, and full user management.
+**Scope:** `/admin` route, gated to admin users. Submissions: stats row, filter by rep, expandable submission detail, CSV export. User management: list users, add user, edit user (name/email/role/repId), reset user password (admin override; resets `password_updated_at` so target user is forced to change on next login), remove user with mandatory reassignment step ("This user has N submissions — reassign to whom?" dropdown of other users, executed in a transaction).
+**Done when:** Admin can view, filter, and export all team submissions. Admin can add, edit, and remove users. Deleting a user with existing submissions requires choosing a reassignment target; the operation is atomic.
 
 ### Cycle 8 — Claude AI summaries
 **Objective:** Wire the Anthropic API for pipeline summaries.
