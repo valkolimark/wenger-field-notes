@@ -1,29 +1,31 @@
 import { NextResponse } from "next/server";
 import { desc, eq } from "drizzle-orm";
+import { auth } from "@/lib/auth";
 import { db } from "@/lib/db/client";
 import { submissions, type InsertSubmission } from "@/lib/db/schema";
 import type { Submission } from "@/lib/submissions";
 
 export const runtime = "nodejs";
 
-// POST /api/submissions — body is a full Cycle 4 Submission.
+// POST /api/submissions — rep identity comes from the session, never the
+// client body (Cycle 6: resolves the Cycle 5 server-trust TODO).
 export async function POST(req: Request) {
   try {
-    const body = (await req.json()) as Partial<Submission>;
+    const session = await auth();
+    if (!session?.user) {
+      return NextResponse.json({ error: "Not signed in." }, { status: 401 });
+    }
 
+    const body = (await req.json()) as Partial<Submission>;
     const missing: string[] = [];
     if (!body.id) missing.push("id");
     if (!body.schoolId) missing.push("schoolId");
     if (!body.schoolName) missing.push("schoolName");
-    if (!body.repId) missing.push("repId");
-    if (!body.repName) missing.push("repName");
     if (!body.visitDate) missing.push("visitDate");
     if (!body.priority?.visitPriority) missing.push("priority.visitPriority");
     if (missing.length > 0) {
       return NextResponse.json(
-        {
-          error: `Couldn't save this visit — missing ${missing.join(", ")}.`,
-        },
+        { error: `Couldn't save this visit — missing ${missing.join(", ")}.` },
         { status: 400 },
       );
     }
@@ -40,8 +42,9 @@ export async function POST(req: Request) {
       id: body.id!,
       schoolId: body.schoolId!,
       schoolName: body.schoolName!,
-      repId: body.repId!,
-      repName: body.repName!,
+      repId: session.user.repId,
+      repName:
+        session.user.name ?? session.user.email ?? session.user.repId,
       visitDate,
       priority: body.priority!,
       contact: body.contact!,
@@ -51,7 +54,6 @@ export async function POST(req: Request) {
       notes: body.notes ?? "",
     };
 
-    // Idempotent on id so the one-time legacy backfill can safely retry.
     const inserted = await db
       .insert(submissions)
       .values(values)
@@ -77,24 +79,30 @@ export async function POST(req: Request) {
   }
 }
 
-// GET /api/submissions?repId=… — this rep's submissions, newest first.
-export async function GET(req: Request) {
+// GET /api/submissions — reps see their own; admins see all.
+export async function GET() {
   try {
-    const { searchParams } = new URL(req.url);
-    // TODO(cycle-6): replace with session.user — don't trust the query param.
-    const repId = searchParams.get("repId");
-    if (!repId) {
-      return NextResponse.json(
-        { error: "Missing repId." },
-        { status: 400 },
-      );
+    const session = await auth();
+    if (!session?.user) {
+      return NextResponse.json({ error: "Not signed in." }, { status: 401 });
     }
 
-    const rows = await db
+    const base = db
       .select()
       .from(submissions)
-      .where(eq(submissions.repId, repId))
       .orderBy(desc(submissions.visitDate), desc(submissions.createdAt));
+
+    const rows =
+      session.user.role === "admin"
+        ? await base
+        : await db
+            .select()
+            .from(submissions)
+            .where(eq(submissions.repId, session.user.repId))
+            .orderBy(
+              desc(submissions.visitDate),
+              desc(submissions.createdAt),
+            );
 
     return NextResponse.json({ submissions: rows });
   } catch (err) {
