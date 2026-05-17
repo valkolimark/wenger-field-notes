@@ -21,8 +21,10 @@ const EMAIL_RE = /^\S+@\S+\.\S+$/;
 export async function PATCH(req: Request) {
   try {
     const session = await auth();
-    const sessionEmail = session?.user?.email?.toLowerCase();
-    if (!sessionEmail) {
+    // Resolve by repId (stable, not editable here) — NOT email, which
+    // goes stale in the JWT after an email change until re-login.
+    const sessionRepId = session?.user?.repId;
+    if (!sessionRepId) {
       return NextResponse.json({ error: "Not signed in." }, { status: 401 });
     }
 
@@ -53,7 +55,7 @@ export async function PATCH(req: Request) {
     }
 
     const me = (
-      await db.select().from(users).where(eq(users.email, sessionEmail))
+      await db.select().from(users).where(eq(users.repId, sessionRepId))
     )[0];
     if (!me) {
       return NextResponse.json(
