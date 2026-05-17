@@ -6,6 +6,38 @@ Format: `## Cycle N — Title (YYYY-MM-DD)` followed by a short prose summary, t
 
 ---
 
+## Cycle 5 — Database & persistence (2026-05-16)
+
+Submissions moved from `localStorage` to Neon Postgres (Drizzle + `@neondatabase/serverless`), so they survive refresh and sync across devices for the same rep. Drafts stay local. No auth yet.
+
+**Added**
+- Neon Postgres via the **Vercel Marketplace** integration (`neon-sky-river`); env vars in Production/Preview/Development
+- `src/lib/db/schema.ts` — `submissions` table: text `id` PK (client uuid), `school_id/school_name/rep_id/rep_name` text, `visit_date` timestamptz, the 5 sectioned blocks as **`jsonb` `.$type<…>()`** against Cycle 4 form sub-types, `notes` text default `''`, `created_at/updated_at` timestamptz `now()`; indexes on `rep_id`/`school_id`/`visit_date`
+- `src/lib/db/client.ts` — pooled `DATABASE_URL`, `neon()` + `drizzle(neon-http)`, throws if unset
+- `drizzle.config.ts` (+ `dotenv` reading `.env.local`); committed migration `drizzle/0000_classy_blob.sql` (applied to Neon)
+- API (`runtime='nodejs'`, try/catch human 500): `POST /api/submissions` (hand-validated scalars, 400 human msg, `onConflictDoNothing(id)`, returns row), `GET /api/submissions?repId=…` (400 if missing; sorted `visit_date desc, created_at desc`), `GET /api/submissions/[id]` (row or 404 `Submission not found`)
+- `migrate-legacy.tsx` — one-time, idempotent local→Neon backfill mounted once in `(app)/layout.tsx`; clears `wenger.submissions.v1` on full success, quiet toast on partial; **drafts untouched**
+- Loading/error states: list 3 skeleton cards + error banner w/ Try again; detail skeleton + 404 + retry; save bar "Saving…" + inline error
+
+**Changed**
+- `use-submissions.ts` → `fetch('/api/submissions?repId=…')` on mount + window focus; same exported name; adds `error`/`refresh`; keeps last-known data on error
+- `visit-form.tsx` → saves via `POST`; **draft cleared only on 2xx**; failure preserves the form and shows a standard-red inline error (warm `#b8612a` reserved for priority)
+- `submission-detail.tsx` → reads `GET /api/submissions/[id]` (works on a fresh browser / deep-link)
+- `src/lib/submissions.ts` — **deleted** the now-dead `appendSubmission` / `loadSubmissionsForRep` / `getSubmission` (avoid two sources of truth); kept all types, draft helpers, `loadAllSubmissions`, added `clearLegacySubmissions`
+
+**Dependencies (approved, flagged):** `drizzle-orm@0.45.2`, `@neondatabase/serverless@1.1.0`; dev: `drizzle-kit@0.31.10`, `dotenv@17.4.2`. Bundle impact: server-only (db client/driver, API routes) — **no DATABASE_URL or connection string in client chunks** (verified `grep .next/static`); negligible client JS delta.
+
+**Notes / flagged**
+- **Pooled var = `DATABASE_URL`** (host contains `-pooler`); `DATABASE_URL_UNPOOLED` + `POSTGRES_*`/`PG*` also injected but unused. App uses `DATABASE_URL` only
+- Auth deferred to Cycle 6: server **trusts `repId` in the request this cycle only** — `TODO(cycle-6)` markers on every server read; `GET /api/submissions/[id]` has no rep filter yet (Cycle 6 adds 403 on session mismatch)
+- No Cycle 4 `Submission` field needed a JSON-shape judgment call — the 5 blocks map 1:1 to `jsonb` columns
+- Housekeeping: Vercel CLI appended `.env*.local` to `.gitignore` (committed; `.env.local` + `.vercel` confirmed ignored — no secrets tracked)
+- **Infra reality (flagged):** there are two Vercel projects under team `fast-paced` — the live app is **`valkolimark-wenger-field-notes`** (Git auto-deploy; serves the live URL) and a separate CLI-linked **`wenger-field-notes`**. Neon (`neon-sky-river`, the migrated DB) was first connected to the wrong (`wenger-field-notes`) project; a stale empty Neon resource (`neon-cyan-drawer`) on the live project was disconnected; `neon-sky-river` was then connected to **`valkolimark-wenger-field-notes`** via the dashboard. `.vercel/` is now linked to the live project.
+- **Sensitive env vars:** the dashboard connect created `DATABASE_URL` as **Sensitive** → `vercel env pull` returns it blank by design. It IS present at function runtime — verified by redeploy + live API, not by pull. Local dev/migrations use the working `DATABASE_URL` already in `.env.local` (same Neon DB).
+- **Follow-ups (not blocking):** `neon-sky-river` is still also connected to the unused `wenger-field-notes` project; the orphaned `neon-cyan-drawer` resource and the unused project should be tidied in a later polish pass.
+- Verified: build clean (8 routes incl. 2 API), drizzle-kit no schema drift, **full production round-trip against the live URL** (`/api/submissions` create/idempotent/list/by-id/400/404 → correct) with smoke rows deleted; no `DATABASE_URL` in client chunks. Cross-device same-rep sync, legacy backfill clearing, and offline-save-preserves-draft are the in-browser portions of the live check.
+- Live URL unchanged: https://valkolimark-wenger-field-notes.vercel.app
+
 ## Cycle 4 — Visit form & local submissions (2026-05-16)
 
 Replaced the form stub with the full visit form, persisted submissions and debounced drafts to `localStorage`, and built the real My Submissions list + read-only detail. Intentionally local-only — Cycle 5 adds the database.

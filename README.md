@@ -26,7 +26,14 @@ Then open http://localhost:3000.
 Create `.env.local` in the project root. Variables required per cycle:
 
 - **Cycle 1-2:** None
-- **Cycle 5+:** `DATABASE_URL` (auto-injected by Vercel Neon integration locally via `vercel env pull`)
+- **Cycle 5+ (active):** `DATABASE_URL` — the **pooled** Neon connection
+  (host contains `-pooler`), plus `DATABASE_URL_UNPOOLED` and the
+  `POSTGRES_*` / `PG*` family. All auto-injected by the **Neon Vercel
+  Marketplace** integration. The app uses `DATABASE_URL` only.
+  Note: on the live project the Neon vars are marked **Sensitive**, so
+  `vercel env pull` returns them blank — for local dev/migrations keep a
+  working `DATABASE_URL` in `.env.local` (same Neon DB), or copy the
+  connection string from the Neon dashboard. `.env.local` is gitignored.
 - **Cycle 6+:** `AUTH_SECRET`, `RESEND_API_KEY`, `EMAIL_FROM`
 - **Cycle 8+:** `ANTHROPIC_API_KEY`
 
@@ -43,28 +50,35 @@ source addresses; a few ambiguous ones are marked `// TODO: verify coords`.
 Source of record: `docs/California Private School- LA and Architects.docx`.
 The interactive map uses Leaflet with free OpenStreetMap tiles (no API key).
 
-### Visit form & submissions (local-only until Cycle 5)
+### Visit form & submissions
 
 Reps open a school from the map and fill the visit form at
 `/form/[schoolId]` — a warm-accented **priority block** (Visit priority is
 the only required field) plus collapsible Contact / Purchasing /
 Decision-making / Marketing / Notes sections. As they work, an in-progress
-**draft** auto-saves (debounced). On save, the submission is appended to
-`localStorage` and shows in **My Submissions** (`/submissions`) with a
-read-only detail at `/submissions/[id]`.
+**draft** auto-saves (debounced). On save, the submission is POSTed to the
+API and shows in **My Submissions** (`/submissions`) with a read-only
+detail at `/submissions/[id]`.
 
-`localStorage` schema (see `src/lib/submissions.ts`):
+**Cycle 5 — submissions now live in Neon Postgres; drafts remain local.**
 
-- `wenger.submissions.v1` — JSON array of `Submission` objects
-  (`id`, `schoolId`, `schoolName`, `repId`, `repName`, `visitDate`, plus
-  the `priority` / `contact` / `purchasing` / `decisionMaking` /
-  `marketing` blocks and `notes`)
-- `wenger.draft.${repId}.${schoolId}` — one in-progress draft per
-  school+rep; cleared on successful save, never listed as a submission
+- **Submissions** → `submissions` table in Neon (Drizzle ORM,
+  `@neondatabase/serverless`). The 5 sectioned blocks are stored as
+  `jsonb`. API: `POST /api/submissions`, `GET /api/submissions?repId=…`,
+  `GET /api/submissions/[id]` (`runtime = 'nodejs'`). Schema in
+  `src/lib/db/schema.ts`; migrations in `drizzle/` (`drizzle-kit`). They
+  survive refresh and **sync across devices for the same rep**.
+- **Drafts** stay in `localStorage` under
+  `wenger.draft.${repId}.${schoolId}` — one in-progress draft per
+  school+rep; cleared on successful save, never sent to the server.
+- On first load after upgrade, any legacy `wenger.submissions.v1`
+  entries are **backfilled** to Neon once (idempotent on `id`) and the
+  key is cleared.
 
-**This data lives only in the browser on one device.** Cross-device
-persistence (Neon Postgres) arrives in Cycle 5; real auth in Cycle 6.
-No edit/delete or photo upload yet.
+`repId`/`repName` currently come from the client rep selector and are
+trusted by the API **for this cycle only** — real auth/session lands in
+Cycle 6 (see `TODO(cycle-6)` markers in the API routes). No edit/delete
+or photo upload yet.
 
 ### Project conventions
 
