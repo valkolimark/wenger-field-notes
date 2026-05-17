@@ -226,27 +226,6 @@ export function clearLegacySubmissions(): void {
   }
 }
 
-export function loadSubmissionsForRep(repId: string): Submission[] {
-  return loadAllSubmissions()
-    .filter((s) => s.repId === repId)
-    .sort((a, b) => b.visitDate.localeCompare(a.visitDate));
-}
-
-export function getSubmission(id: string): Submission | undefined {
-  return loadAllSubmissions().find((s) => s.id === id);
-}
-
-export function appendSubmission(submission: Submission): void {
-  if (typeof window === "undefined") return;
-  try {
-    const all = loadAllSubmissions();
-    all.push(submission);
-    window.localStorage.setItem(SUBMISSIONS_KEY, JSON.stringify(all));
-  } catch {
-    // storage full / unavailable — silently degrade for now (Cycle 5 = DB)
-  }
-}
-
 export function loadDraft(repId: string, schoolId: string): Draft | null {
   if (typeof window === "undefined") return null;
   try {

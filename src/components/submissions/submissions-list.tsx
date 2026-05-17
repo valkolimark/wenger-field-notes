@@ -13,17 +13,47 @@ function priorityShort(visitPriority: string): string {
   return visitPriority.split("—")[0]?.trim() || visitPriority || "—";
 }
 
+function SkeletonCards() {
+  return (
+    <div className="mt-5 animate-fade-in-soft space-y-3" aria-hidden>
+      {[0, 1, 2].map((i) => (
+        <div
+          key={i}
+          className="h-[88px] rounded-2xl border border-black/8 bg-white p-4"
+        >
+          <div className="h-4 w-1/2 animate-pulse rounded bg-black/8" />
+          <div className="mt-2 h-3 w-1/3 animate-pulse rounded bg-black/8" />
+          <div className="mt-3 h-3 w-3/4 animate-pulse rounded bg-black/8" />
+        </div>
+      ))}
+    </div>
+  );
+}
+
 export function SubmissionsList() {
   const { rep } = useRep();
   const repId = rep ? repIdFromName(rep) : "";
-  const { submissions, loading } = useSubmissions(repId);
+  const { submissions, loading, error, refresh } = useSubmissions(repId);
 
   return (
     <section>
       <h1 className="font-display text-3xl text-brand-navy">My Submissions</h1>
 
+      {error && (
+        <div className="mt-4 flex items-center justify-between gap-3 rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+          <span>{error}</span>
+          <button
+            type="button"
+            onClick={() => refresh()}
+            className="shrink-0 font-semibold text-red-700 underline underline-offset-2 hover:no-underline"
+          >
+            Try again
+          </button>
+        </div>
+      )}
+
       {loading ? (
-        <p className="mt-6 text-sm text-brand-navy/45">Loading…</p>
+        <SkeletonCards />
       ) : submissions.length === 0 ? (
         <div className="mt-10 flex flex-col items-center text-center">
           <p className="text-sm text-brand-navy/60">
