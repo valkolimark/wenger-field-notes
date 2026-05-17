@@ -43,11 +43,17 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
     }),
   ],
   callbacks: {
-    jwt({ token, user }) {
+    jwt({ token, user, trigger, session }) {
       if (user) {
         token.repId = user.repId;
         token.role = user.role;
         token.mustChangePassword = user.mustChangePassword;
+      }
+      // Cycle 6.5: useSession().update({name,email}) after a profile edit
+      // refreshes the header without re-login.
+      if (trigger === "update" && session) {
+        if (typeof session.name === "string") token.name = session.name;
+        if (typeof session.email === "string") token.email = session.email;
       }
       return token;
     },
