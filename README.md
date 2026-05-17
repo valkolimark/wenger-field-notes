@@ -47,6 +47,11 @@ bootstrap password (`Wenger2026!`). On first login they're forced to
 `/set-password` to choose a new one (min 8 chars) before entering the app.
 There is no rep selector — authentication is by email + password.
 
+**Profile (Cycle 6.5):** any signed-in user can manage their own
+name, email, and password at **`/account`** (linked from the header
+user pill). Email/password changes take effect at next login; name and
+email update in the header immediately. Admin user management is Cycle 7.
+
 ### Tech stack
 
 Next.js 16 (App Router) · TypeScript · Tailwind CSS v4 · Leaflet + react-leaflet (OpenStreetMap tiles) · lucide-react · Neon Postgres · Drizzle ORM · NextAuth v5 · Anthropic SDK · Deployed on Vercel.

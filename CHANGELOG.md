@@ -6,6 +6,26 @@ Format: `## Cycle N — Title (YYYY-MM-DD)` followed by a short prose summary, t
 
 ---
 
+## Cycle 6.5 — User self-service profile edit (2026-05-17)
+
+Logged-in users can edit their own name, email, and password at a new `/account` page. No admin user management (that's Cycle 7).
+
+**Added**
+- `PATCH /api/account` (`runtime=nodejs`) — partial `{name,email,currentPassword,newPassword}`; **target user derived only from the `auth()` session, request-body identity ignored**; name trim/≤120; email lowercase + format + uniqueness-excluding-self (409); password requires bcrypt-verified `currentPassword` + new ≥8; single `UPDATE`; `password_updated_at=now()` only on password change; returns `{name,email,repId,role}`; human error messages
+- `/account` page (`src/app/(app)/account/page.tsx` server → `account-form.tsx` client): three independently-savable sections (Name / Email / Password), branded, reuses the form `TextField` primitive; per-section Saved/error states (Saved auto-dismisses ~2s); password fields cleared on success
+- Header user pill is now a `/account` link (≥44px tap target) alongside Log out
+
+**Changed**
+- `lib/auth.ts` `jwt` callback: added a `trigger==="update"` branch so `useSession().update({name,email})` refreshes the header without re-login. The flagged NextAuth-beta `token.* as …` augmentation casts in the `session` callback were **left untouched** (locked decision)
+
+**Notes**
+- **Zero new dependencies, zero new env vars, zero schema migrations** (`users` already had `name`/`email`/`password_hash`/`password_updated_at`; no `drizzle-kit generate` run)
+- **Middleware unchanged** — Cycle 6's rules are path-generic, so unauth→`/` and `mustChangePassword`→`/set-password` already gate `/account` and `/api/account`. Adding a special-case would introduce a new pattern the brief forbids (Checkpoint 5 = verified no-op)
+- Password change updates the hash + `password_updated_at` but does **not** invalidate the current JWT session (no session-revocation in scope) — "next login uses new password" holds; the active session continues
+- New/confirm password match is enforced client-side; the API takes `newPassword` only
+- Deferred to Cycle 7 (unchanged): admin edit/reset/add/remove users + reassignment; changing `repId`/`role`; email verification; avatars; self-deletion
+- Date note: this cycle landed 2026-05-17
+
 ## Cycle 6 — Real authentication (2026-05-16)
 
 Replaced the rep selector with email + password auth (NextAuth v5 Credentials, JWT sessions, no email sending). Users are seeded from a 7-person allowlist with a generic bootstrap password and forced to change it on first login.
