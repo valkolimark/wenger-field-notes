@@ -6,6 +6,37 @@ Format: `## Cycle N — Title (YYYY-MM-DD)` followed by a short prose summary, t
 
 ---
 
+## Cycle 6 — Real authentication (2026-05-16)
+
+Replaced the rep selector with email + password auth (NextAuth v5 Credentials, JWT sessions, no email sending). Users are seeded from a 7-person allowlist with a generic bootstrap password and forced to change it on first login.
+
+**Added**
+- `next-auth@5.0.0-beta.31` (pinned), `bcryptjs@3.0.3`, `@types/bcryptjs@2.4.6` (dev)
+- `src/lib/allowlist.ts` — 7-person roster (2 admins, 5 reps), lowercase emails
+- `users` table (uuid pk, unique email, name, password_hash, rep_id, role, password_updated_at, created_at); migration `drizzle/0001_whole_whizzer.sql`
+- `scripts/seed-users.ts` + `npm run db:seed` — one bcrypt hash of `SEED_PASSWORD` (cost 10), idempotent upsert by email, `password_updated_at = NULL`. Seeded 7 users
+- `src/lib/auth.ts` (NextAuth v5: Credentials, JWT, jwt/session callbacks expose `repId`/`role`/`mustChangePassword`), `app/api/auth/[...nextauth]/route.ts`
+- Branded email+password sign-in on `/`; `/set-password` force-change screen (server action: validate, rehash, `password_updated_at = now()`, re-issue JWT, → `/map`)
+- `middleware.ts` — unauth → `/`; authed + `mustChangePassword` → `/set-password`; `/api/auth/*` + static excluded
+- `SessionProvider` (`components/providers.tsx`)
+
+**Changed**
+- `/api/submissions` GET/POST + `/[id]`: identity from session (`auth()`), client `repId` trust dropped; reps see own, admins see all (server); `[id]` 401/404/403. **All `TODO(cycle-6)` markers resolved (none remain).**
+- Shell reconciled to the session: `AppHeader` (name + `signOut`), `AppShell` (dropped the localStorage rep gate — middleware now protects), `use-submissions()` (no `repId` arg), `visit-form`/`submissions-list` use the session
+- CLAUDE.md cycle plan updated (Cycle 6 rewrite, Cycle 6.5 inserted, Cycle 7 expanded) — pre-approved
+
+**Removed**
+- Rep selector UI; `rep-context.tsx`; obsolete `migrate-legacy.tsx`
+
+**Decisions / notes (flagged)**
+- **Deliberate Cycle 6 caveat:** the API returns *all* rows for admins (for Cycle 7's `/admin`), but the rep-facing `/submissions` tab filters to the viewer's own `repId` — so in Cycle 6 **admins see only their own on `/submissions`**; the admin "see all" UI ships in Cycle 7.
+- **`CParish → CParrish` fix did NOT run** — no `CParish` rows existed. Instead the same migration remapped the one legacy row `rep_id 'brooke' → 'BHrdlichka'` (old Cycle 1–5 name-slug scheme → allowlist repId), preserving it for Brooke post-auth.
+- **Roster count discrepancy:** CLAUDE.md intro still says "6-person sales team"; the real roster is **5 reps + 2 admins = 7**. Intro text left unedited (no fresh approval) — noted here only.
+- Locked decisions honored: bcryptjs; `SEED_PASSWORD` (`Wenger2026!`) in env not code; lowercase emails; Chad = `CParrish`; `submissions.rep_id` stays string (no FK); JWT-only; `AUTH_TRUST_HOST`.
+- `db:seed` uses `npx tsx` (transient; **no committed dep added** — deps stayed at the 3 approved).
+- `next-auth/jwt` type augmentation is flaky under the beta — `token.*` claims are cast in the session callback (Session/User augmentation works).
+- New env vars required on the live project (Prod/Preview/Dev): `AUTH_SECRET`, `SEED_PASSWORD` (Sensitive), `AUTH_TRUST_HOST=true`. `DATABASE_URL` unchanged from Cycle 5.
+
 ## Cycle 5 — Database & persistence (2026-05-16)
 
 Submissions moved from `localStorage` to Neon Postgres (Drizzle + `@neondatabase/serverless`), so they survive refresh and sync across devices for the same rep. Drafts stay local. No auth yet.

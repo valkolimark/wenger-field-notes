@@ -34,8 +34,18 @@ Create `.env.local` in the project root. Variables required per cycle:
   `vercel env pull` returns them blank — for local dev/migrations keep a
   working `DATABASE_URL` in `.env.local` (same Neon DB), or copy the
   connection string from the Neon dashboard. `.env.local` is gitignored.
-- **Cycle 6+:** `AUTH_SECRET`, `RESEND_API_KEY`, `EMAIL_FROM`
+- **Cycle 6+ (active):** `AUTH_SECRET` (NextAuth JWT signing —
+  `openssl rand -base64 32`), `SEED_PASSWORD` (generic bootstrap
+  password, mark **Sensitive**), `AUTH_TRUST_HOST=true`. Set on the live
+  project for Production/Preview/Development. No Resend / email sending.
+  `SEED_PASSWORD` is read only by `npm run db:seed` (never committed; pass
+  inline locally).
 - **Cycle 8+:** `ANTHROPIC_API_KEY`
+
+**First-time login:** allowlisted users sign in with their email and the
+bootstrap password (`Wenger2026!`). On first login they're forced to
+`/set-password` to choose a new one (min 8 chars) before entering the app.
+There is no rep selector — authentication is by email + password.
 
 ### Tech stack
 
@@ -75,10 +85,11 @@ detail at `/submissions/[id]`.
   entries are **backfilled** to Neon once (idempotent on `id`) and the
   key is cleared.
 
-`repId`/`repName` currently come from the client rep selector and are
-trusted by the API **for this cycle only** — real auth/session lands in
-Cycle 6 (see `TODO(cycle-6)` markers in the API routes). No edit/delete
-or photo upload yet.
+**Cycle 6:** `repId`/`repName` now come from the authenticated session
+(NextAuth) — the API no longer trusts client-supplied identity. Reps see
+only their own submissions; admins are scoped the same on `/submissions`
+(the admin "see all" view ships in Cycle 7). No edit/delete or photo
+upload yet.
 
 ### Project conventions
 
