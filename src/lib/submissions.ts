@@ -216,6 +216,16 @@ export function loadAllSubmissions(): Submission[] {
   }
 }
 
+/** Cycle 5: remove the legacy local submissions key after backfill. */
+export function clearLegacySubmissions(): void {
+  if (typeof window === "undefined") return;
+  try {
+    window.localStorage.removeItem(SUBMISSIONS_KEY);
+  } catch {
+    // ignore
+  }
+}
+
 export function loadSubmissionsForRep(repId: string): Submission[] {
   return loadAllSubmissions()
     .filter((s) => s.repId === repId)
