@@ -1,4 +1,11 @@
-import { pgTable, text, timestamp, jsonb, index } from "drizzle-orm/pg-core";
+import {
+  pgTable,
+  text,
+  timestamp,
+  jsonb,
+  index,
+  uuid,
+} from "drizzle-orm/pg-core";
 import type { VisitFormData } from "@/lib/submissions";
 
 // The 5 sectioned blocks are jsonb typed against the Cycle 4 form
@@ -44,3 +51,24 @@ export const submissions = pgTable(
 
 export type SubmissionRow = typeof submissions.$inferSelect;
 export type InsertSubmission = typeof submissions.$inferInsert;
+
+// Cycle 6: auth users. Seeded from lib/allowlist.ts. rep_id stays a
+// human-readable string (no FK to submissions.rep_id — preserves Cycle 5
+// rows). password_updated_at NULL => force change on first login.
+export const users = pgTable("users", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  email: text("email").notNull().unique(),
+  name: text("name"),
+  passwordHash: text("password_hash").notNull(),
+  repId: text("rep_id").notNull(),
+  role: text("role").notNull(),
+  passwordUpdatedAt: timestamp("password_updated_at", {
+    withTimezone: true,
+  }),
+  createdAt: timestamp("created_at", { withTimezone: true })
+    .defaultNow()
+    .notNull(),
+});
+
+export type UserRow = typeof users.$inferSelect;
+export type InsertUser = typeof users.$inferInsert;
