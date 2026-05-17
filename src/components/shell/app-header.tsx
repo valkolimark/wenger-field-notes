@@ -1,6 +1,7 @@
 "use client";
 
 import Image from "next/image";
+import Link from "next/link";
 import { LogOut } from "lucide-react";
 import { useSession, signOut } from "next-auth/react";
 
@@ -22,14 +23,18 @@ export function AppHeader() {
         />
 
         <div className="flex items-center gap-2">
-          <div className="flex items-center gap-2 rounded-full bg-white/10 py-1 pl-1 pr-1 sm:pr-3">
+          <Link
+            href="/account"
+            aria-label="Account settings"
+            className="flex min-h-[44px] items-center gap-2 rounded-full bg-white/10 py-1 pl-1 pr-1 transition-colors duration-200 hover:bg-white/20 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white sm:pr-3"
+          >
             <span className="grid h-7 w-7 place-items-center rounded-full bg-white/15 text-xs font-semibold text-white">
               {initial}
             </span>
             <span className="hidden text-sm font-medium text-white sm:inline">
               {name}
             </span>
-          </div>
+          </Link>
 
           <button
             type="button"
