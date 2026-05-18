@@ -156,8 +156,18 @@ Cycles are numbered. Each has an objective, a scope, and a done-criteria. Cycles
 **Scope:** Loading skeletons, error boundaries, empty states, custom domain setup, team onboarding (handoff to admin Mark for distribution; no email sending — app has no email infrastructure).
 **Done when:** Team is using it. Real data is flowing.
 
-### Cycles 10+ — Iteration based on real-world feedback
-Defined as needed once the team starts using it.
+### Cycle 10 — Edit & delete submissions
+**Objective:** Reps can edit and delete their own submissions; admins can edit and delete any submission.
+**Scope:** `PATCH` + `DELETE` on a single `/api/submissions/[id]` route (`runtime=nodejs`), owner-or-admin enforced server-side like the existing GET (401/404/403); PATCH body-validated the same way `POST /api/submissions` is; identity (`id`/`repId`/`repName`/`schoolId`/`schoolName`) is immutable so an admin edit never reassigns ownership; `updatedAt` bumped. Reuse the existing visit form, prefilled, in an edit mode that bypasses the localStorage draft system. Delete uses the existing `useToast().confirm()` modal (no `window.confirm`). Entry points: `/submissions` list + `/submissions/[id]` detail (rep, own rows) and the `/admin` Submissions expandable detail (admin, any row). New `/submissions/[id]/edit` route gets `loading.tsx`/`error.tsx`; reuse `<Button>`/`useToast`/skeletons/`<ErrorState>`.
+**Done when:** A rep can edit and delete only their own submissions and an admin any (server-enforced); edits persist in Neon and reflect in list/detail/admin; an admin edit never reassigns the submission's rep; deletes use the toast confirm modal; build clean; verified live.
+
+### Cycle 11 — Standalone/PWA presentation polish
+**Objective:** The installed/standalone PWA feels native (no overlap, nothing offscreen, no resize glitches) and the app header is layout-aware.
+**Scope:** Web app manifest (standalone display, `start_url`, `scope`, `theme-color = #0A3758`, icons), `viewport-fit=cover`, and safe-area-inset handling so the navy header and the Map / My Submissions tab bar never collide with the OS status bar or home indicator. Adaptive header: on full-width pages the logo sits flush far-left and the user/nav controls flush far-right; on boxed/constrained pages keep the current content-width alignment — driven by a layout-aware signal, not per-page hardcoding. Test at 375px and installed standalone (iOS + Android). Flag any new dependency before adding it.
+**Done when:** Installed to the home screen on iOS and Android the app shows no overlap/offscreen/resize glitches; header alignment adapts correctly to full-width vs boxed routes; 375px is unaffected; build clean; verified live.
+
+### Cycles 12+ — Iteration based on real-world feedback
+Defined as needed once the team keeps using it.
 
 ---
 
