@@ -5,29 +5,14 @@ import { Map as MapIcon, ChevronRight } from "lucide-react";
 import { useSession } from "next-auth/react";
 import { schools } from "@/lib/schools";
 import { formatVisitDate } from "@/lib/submissions";
+import { buttonClass } from "@/components/ui/button";
+import { RowsSkeleton } from "@/components/ui/skeleton";
 import { useSubmissions } from "./use-submissions";
 
 const CITY_BY_ID = new Map(schools.map((s) => [s.id, s.city]));
 
 function priorityShort(visitPriority: string): string {
   return visitPriority.split("—")[0]?.trim() || visitPriority || "—";
-}
-
-function SkeletonCards() {
-  return (
-    <div className="mt-5 animate-fade-in-soft space-y-3" aria-hidden>
-      {[0, 1, 2].map((i) => (
-        <div
-          key={i}
-          className="h-[88px] rounded-2xl border border-black/8 bg-white p-4"
-        >
-          <div className="h-4 w-1/2 animate-pulse rounded bg-black/8" />
-          <div className="mt-2 h-3 w-1/3 animate-pulse rounded bg-black/8" />
-          <div className="mt-3 h-3 w-3/4 animate-pulse rounded bg-black/8" />
-        </div>
-      ))}
-    </div>
-  );
 }
 
 export function SubmissionsList() {
@@ -61,15 +46,16 @@ export function SubmissionsList() {
       )}
 
       {loading ? (
-        <SkeletonCards />
+        <RowsSkeleton rows={4} />
       ) : visible.length === 0 ? (
-        <div className="mt-10 flex flex-col items-center text-center">
-          <p className="text-sm text-brand-navy/60">
-            No visits logged yet — head to the map to log your first.
+        <div className="mt-12 flex flex-col items-center text-center">
+          <p className="max-w-xs text-sm leading-relaxed text-brand-navy/60">
+            You haven&apos;t logged a visit yet. Find a school on the Map
+            and tap &ldquo;Start visit&rdquo; to begin.
           </p>
           <Link
             href="/map"
-            className="mt-5 inline-flex items-center gap-2 rounded-xl bg-brand-navy px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-brand-navy-light"
+            className={`${buttonClass("primary")} mt-5`}
           >
             <MapIcon size={16} aria-hidden />
             Go to map
