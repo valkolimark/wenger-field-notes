@@ -50,6 +50,6 @@ export default auth((req) => {
 
 export const config = {
   matcher: [
-    "/((?!_next/static|_next/image|favicon.ico|logo-white\\.png|logo-blue\\.png|logo-brand-white\\.png|.*\\.svg).*)",
+    "/((?!_next/static|_next/image|favicon.ico|manifest.webmanifest|icon-192\\.png|icon-512\\.png|apple-touch-icon\\.png|logo-white\\.png|logo-blue\\.png|logo-brand-white\\.png|.*\\.svg).*)",
   ],
 };
