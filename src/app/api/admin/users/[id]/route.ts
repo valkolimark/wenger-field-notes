@@ -174,3 +174,100 @@ export async function PATCH(
     );
   }
 }
+
+// DELETE /api/admin/users/[id] — safe delete with mandatory submission
+// handling (GATE 2). neon-http has no interactive transactions; db.batch
+// runs the mutations atomically (single server-side transaction).
+export async function DELETE(
+  req: Request,
+  { params }: { params: Promise<{ id: string }> },
+) {
+  try {
+    const gate = await requireAdmin();
+    if (!gate.ok) return gate.res;
+    const { id } = await params;
+
+    const target = (
+      await db.select().from(users).where(eq(users.id, id))
+    )[0];
+    if (!target) {
+      return NextResponse.json(
+        { error: "User not found." },
+        { status: 404 },
+      );
+    }
+    if (target.repId === gate.repId) {
+      return NextResponse.json(
+        { error: "You can't delete your own account." },
+        { status: 403 },
+      );
+    }
+
+    const n = await countFor(target.repId);
+
+    if (n === 0) {
+      await db.delete(users).where(eq(users.id, id));
+      return NextResponse.json({ deleted: true });
+    }
+
+    const body = (await req.json().catch(() => ({}))) as {
+      reassignTo?: unknown;
+      deleteSubmissions?: unknown;
+    };
+    const reassignTo =
+      typeof body.reassignTo === "string" ? body.reassignTo.trim() : "";
+    const deleteSubmissions = body.deleteSubmissions === true;
+
+    if (!reassignTo && !deleteSubmissions) {
+      return NextResponse.json(
+        {
+          error: `This user has ${n} submission(s) — choose reassign or delete.`,
+        },
+        { status: 400 },
+      );
+    }
+    if (reassignTo && deleteSubmissions) {
+      return NextResponse.json(
+        { error: "Choose either reassign or delete, not both." },
+        { status: 400 },
+      );
+    }
+
+    if (deleteSubmissions) {
+      await db.batch([
+        db.delete(submissions).where(eq(submissions.repId, target.repId)),
+        db.delete(users).where(eq(users.id, id)),
+      ]);
+      return NextResponse.json({ deleted: true, deletedSubmissions: n });
+    }
+
+    const dest = (
+      await db.select().from(users).where(eq(users.repId, reassignTo))
+    )[0];
+    if (!dest || dest.id === target.id) {
+      return NextResponse.json(
+        { error: "Reassignment target not found." },
+        { status: 400 },
+      );
+    }
+
+    await db.batch([
+      db
+        .update(submissions)
+        .set({ repId: dest.repId, repName: dest.name ?? dest.repId })
+        .where(eq(submissions.repId, target.repId)),
+      db.delete(users).where(eq(users.id, id)),
+    ]);
+    return NextResponse.json({
+      deleted: true,
+      reassignedCount: n,
+      reassignedTo: dest.repId,
+    });
+  } catch (err) {
+    console.error("DELETE /api/admin/users/[id] failed:", err);
+    return NextResponse.json(
+      { error: "Couldn't delete user — please try again." },
+      { status: 500 },
+    );
+  }
+}
