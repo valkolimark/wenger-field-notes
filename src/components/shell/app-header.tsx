@@ -3,11 +3,17 @@
 import { useEffect, useRef, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import { ChevronDown, Shield, User, LogOut } from "lucide-react";
 import { useSession, signOut } from "next-auth/react";
+import { isFullWidthRoute } from "@/lib/layout-mode";
 
 export function AppHeader() {
   const { data: session } = useSession();
+  // Layout-aware: full-bleed routes (e.g. /map) push the logo to the far
+  // left and the user menu to the far right; boxed routes keep the
+  // content-width (max-w-3xl) alignment unchanged.
+  const fullWidth = isFullWidthRoute(usePathname());
   const name = session?.user?.name || session?.user?.email || "";
   const role = session?.user?.role;
   const initial = name ? name.charAt(0).toUpperCase() : "?";
@@ -39,7 +45,11 @@ export function AppHeader() {
 
   return (
     <header className="fixed inset-x-0 top-0 z-30 bg-brand-navy pt-[env(safe-area-inset-top)]">
-      <div className="mx-auto flex h-14 w-full max-w-3xl items-center justify-between px-4">
+      <div
+        className={`flex h-14 w-full items-center justify-between px-4 ${
+          fullWidth ? "" : "mx-auto max-w-3xl"
+        }`}
+      >
         <Image
           src="/logo-brand-white.png"
           alt="Wenger Corporation"
