@@ -8,6 +8,12 @@
   --color-brand-warm: #b8612a;
   --color-brand-warm-soft: #f5ebe0;
 
+  /* --- Destructive (Cycle 9): a distinct RED hue, never confused with
+     the warm priority accent above (orange-brown). --- */
+  --color-danger: #b42318;
+  --color-danger-dark: #8f1d13;
+  --color-danger-soft: #fdecea;
+
   /* --- Typography: system stack for UI, Georgia serif for display only --- */
   --font-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto,
     Helvetica, Arial, sans-serif;
@@ -21,6 +27,31 @@
   /* Preview card: bottom sheet (mobile) / side panel (desktop) */
   --animate-sheet-up: sheet-up 220ms ease-out both;
   --animate-sheet-in: sheet-in 220ms ease-out both;
+  /* Cycle 9: modal pop + toast slide-in */
+  --animate-pop: pop 180ms ease-out both;
+  --animate-toast-in: toast-in 200ms ease-out both;
+}
+
+@keyframes pop {
+  from {
+    opacity: 0;
+    transform: scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes toast-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 @keyframes fade-in {
