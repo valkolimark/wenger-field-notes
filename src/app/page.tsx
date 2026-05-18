@@ -81,7 +81,7 @@ export default function LoginPage() {
           <button
             type="submit"
             disabled={submitting}
-            className="flex h-12 w-full items-center justify-center rounded-xl bg-white px-5 text-base font-semibold text-brand-navy transition-all duration-200 hover:bg-white/90 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white disabled:opacity-60"
+            className="flex h-12 w-full items-center justify-center rounded-xl bg-white px-5 text-base font-semibold text-brand-navy transition-all duration-200 ease-out hover:bg-white/90 active:scale-[0.98] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white disabled:opacity-60"
           >
             {submitting ? "Signing in…" : "Sign in"}
           </button>
