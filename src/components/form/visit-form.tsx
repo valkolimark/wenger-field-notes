@@ -18,6 +18,7 @@ import {
   saveDraft,
   clearDraft,
   formatRelative,
+  formatVisitDate,
   VISIT_PRIORITY_OPTIONS,
   PROJECT_TIMING_OPTIONS,
   OPPORTUNITY_SIZE_OPTIONS,
@@ -68,14 +69,44 @@ function reducer(state: VisitFormData, action: Action): VisitFormData {
   }
 }
 
-export function VisitForm({ school }: { school: School }) {
+/** The editable VisitFormData carried by an existing submission, deep
+ *  cloned so the reducer never mutates the loaded row. */
+function initialFormData(sub?: Submission): VisitFormData {
+  if (!sub) return createEmptyForm();
+  return JSON.parse(
+    JSON.stringify({
+      priority: sub.priority,
+      contact: sub.contact,
+      purchasing: sub.purchasing,
+      decisionMaking: sub.decisionMaking,
+      marketing: sub.marketing,
+      notes: sub.notes,
+    }),
+  ) as VisitFormData;
+}
+
+export function VisitForm({
+  school,
+  editSubmission,
+}: {
+  school: School;
+  editSubmission?: Submission;
+}) {
   const router = useRouter();
   const { data: session } = useSession();
   const { success, confirm } = useToast();
   const repId = session?.user?.repId ?? "";
   const repName = session?.user?.name ?? session?.user?.email ?? "";
 
-  const [form, dispatch] = useReducer(reducer, undefined, createEmptyForm);
+  // Cycle 10: edit mode reuses this form, prefilled, and never touches
+  // the localStorage draft system (no restore, no autosave).
+  const isEdit = !!editSubmission;
+
+  const [form, dispatch] = useReducer(
+    reducer,
+    editSubmission,
+    initialFormData,
+  );
   const [priorityError, setPriorityError] = useState<string>("");
   const [draftAt, setDraftAt] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
@@ -83,12 +114,14 @@ export function VisitForm({ school }: { school: School }) {
   const [saveError, setSaveError] = useState<string | null>(null);
 
   const priorityRef = useRef<HTMLDivElement>(null);
-  const baselineRef = useRef<string>(JSON.stringify(createEmptyForm()));
+  const baselineRef = useRef<string>(
+    JSON.stringify(initialFormData(editSubmission)),
+  );
   const restoredRef = useRef(false);
 
-  // Restore an existing draft once (per rep + school).
+  // Restore an existing draft once (per rep + school) — new-visit only.
   useEffect(() => {
-    if (restoredRef.current || !repId) return;
+    if (isEdit || restoredRef.current || !repId) return;
     restoredRef.current = true;
     const draft = loadDraft(repId, school.id);
     if (draft) {
@@ -96,16 +129,16 @@ export function VisitForm({ school }: { school: School }) {
       baselineRef.current = JSON.stringify(draft.data);
       setDraftAt(draft.updatedAt);
     }
-  }, [repId, school.id]);
+  }, [isEdit, repId, school.id]);
 
   const isDirty = JSON.stringify(form) !== baselineRef.current;
 
-  // Debounced draft autosave.
+  // Debounced draft autosave — new-visit only; never in edit mode.
   useEffect(() => {
-    if (!repId || !isDirty || saved) return;
+    if (isEdit || !repId || !isDirty || saved) return;
     const t = setTimeout(() => saveDraft(repId, school.id, form), 400);
     return () => clearTimeout(t);
-  }, [form, repId, school.id, isDirty, saved]);
+  }, [isEdit, form, repId, school.id, isDirty, saved]);
 
   function discardDraft() {
     clearDraft(repId, school.id);
@@ -125,7 +158,9 @@ export function VisitForm({ school }: { school: School }) {
       });
       if (!ok) return;
     }
-    router.push("/map");
+    router.push(
+      isEdit ? `/submissions/${editSubmission!.id}` : "/map",
+    );
   }
 
   function handleMetWith(next: string[]) {
@@ -149,6 +184,36 @@ export function VisitForm({ school }: { school: School }) {
     if (!repId || saving) return;
     setSaveError(null);
     setSaving(true);
+
+    // --- Edit: PATCH the existing row. Identity (id/repId/repName/
+    // school/visitDate) is server-preserved regardless of body; sent for
+    // completeness. No localStorage draft is involved. ---
+    if (isEdit && editSubmission) {
+      try {
+        const res = await fetch(
+          `/api/submissions/${editSubmission.id}`,
+          {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ ...editSubmission, ...form }),
+          },
+        );
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      } catch {
+        setSaving(false);
+        setSaveError(
+          "Couldn't save your changes — check your connection and try again.",
+        );
+        return;
+      }
+      setSaved(true);
+      success("Visit updated");
+      setTimeout(
+        () => router.push(`/submissions/${editSubmission.id}`),
+        900,
+      );
+      return;
+    }
 
     const submission: Submission = {
       id: newSubmissionId(school.id),
@@ -192,7 +257,7 @@ export function VisitForm({ school }: { school: School }) {
         className="inline-flex items-center gap-1.5 text-sm font-medium text-brand-navy/60 transition-colors hover:text-brand-navy"
       >
         <ArrowLeft size={16} aria-hidden />
-        Back to map
+        {isEdit ? "Back to submission" : "Back to map"}
       </button>
 
       <header className="mt-4">
@@ -203,7 +268,11 @@ export function VisitForm({ school }: { school: School }) {
           {school.address}, {school.city}
         </p>
         <p className="mt-1 text-xs text-brand-navy/40">
-          Your progress auto-saves as a draft on this device.
+          {isEdit
+            ? `Editing a saved visit · logged ${formatVisitDate(
+                editSubmission!.visitDate,
+              )}`
+            : "Your progress auto-saves as a draft on this device."}
         </p>
       </header>
 
@@ -458,17 +527,23 @@ export function VisitForm({ school }: { school: School }) {
             disabled={saving}
             className="w-full"
           >
-            {saving ? "Saving…" : "Save submission"}
+            {saving
+              ? "Saving…"
+              : isEdit
+                ? "Save changes"
+                : "Save submission"}
           </Button>
-          <Button
-            type="button"
-            variant="ghost"
-            onClick={() => save("map")}
-            disabled={saving}
-            className="h-9 text-xs"
-          >
-            Save &amp; start another visit
-          </Button>
+          {!isEdit && (
+            <Button
+              type="button"
+              variant="ghost"
+              onClick={() => save("map")}
+              disabled={saving}
+              className="h-9 text-xs"
+            >
+              Save &amp; start another visit
+            </Button>
+          )}
         </div>
       </div>
     </div>
