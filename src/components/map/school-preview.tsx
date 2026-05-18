@@ -4,6 +4,7 @@ import { useEffect } from "react";
 import Link from "next/link";
 import { X } from "lucide-react";
 import { type School, TIER_LABELS } from "@/lib/schools";
+import { buttonClass } from "@/components/ui/button";
 
 export function SchoolPreview({
   school,
@@ -91,7 +92,7 @@ export function SchoolPreview({
         <div className="border-t border-black/5 p-4">
           <Link
             href={`/form/${school.id}`}
-            className="flex min-h-[48px] w-full items-center justify-center rounded-xl bg-brand-navy px-5 text-sm font-semibold text-white transition-colors duration-200 hover:bg-brand-navy-light focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-navy"
+            className={buttonClass("primary", "lg", "w-full")}
           >
             Start visit
           </Link>
