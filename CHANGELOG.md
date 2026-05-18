@@ -6,6 +6,82 @@ Format: `## Cycle N — Title (YYYY-MM-DD)` followed by a short prose summary, t
 
 ---
 
+## Cycle 10 — Edit & delete submissions (2026-05-18)
+
+Reps can now edit and delete their **own** submissions; admins can edit
+and delete **any** submission. The visit form is reused, prefilled, for
+editing. First slice of the post-launch 2-cycle split (Cycle 11 =
+standalone/PWA + adaptive header).
+
+**CLAUDE.md (Checkpoint 1, pre-approved):** the open-ended "Cycles 10+"
+placeholder replaced with concrete **Cycle 10** (edit/delete) and
+**Cycle 11** (standalone/PWA presentation polish) entries + a new
+"Cycles 12+" placeholder. `docs/NEXT-SESSION.md` (the kickoff doc) is now
+tracked.
+
+**GATE decisions (approved):**
+- **One route, not two:** `PATCH` + `DELETE` added to the existing
+  `/api/submissions/[id]` (owner-or-admin), not a separate
+  `/api/admin/submissions/[id]`. Admin UI calls the same route.
+- **Edit bypasses the localStorage draft system entirely** — no restore,
+  no autosave in edit mode; the new-visit draft flow is byte-unchanged.
+- **Content-only editable, identity locked:** `priority` + Contact /
+  Purchasing / Decision-making / Marketing / Notes editable;
+  `id`/`repId`/`repName`/`schoolId`/`schoolName` immutable, so an admin
+  editing another rep's row never reassigns ownership. `visitDate` is
+  round-tripped (the form has no date control) and `updatedAt` is bumped.
+
+**Added**
+- `PATCH` + `DELETE` on `/api/submissions/[id]` (`runtime=nodejs`) behind
+  a shared `authorizeForRow()` gate — 401 → 404 → 403, session-derived
+  `repId` (never body/email); PATCH body-validated like
+  `POST /api/submissions`; single atomic row `DELETE` (no `db.batch`
+  needed for one statement). `GET` refactored onto the shared gate
+  (behavior unchanged).
+- `/submissions/[id]/edit` route: server `page.tsx` → `EditSubmission`
+  client loader (mirrors `SubmissionDetail`:
+  loading/notfound/forbidden/error) → reuses `<VisitForm>` prefilled +
+  route `loading.tsx` (`FormSkeleton`) / `error.tsx` (`<ErrorState>`).
+- Rep entry points: Edit + Delete on `/submissions/[id]` detail
+  (destructive `<Button>`) and per-row on the `/submissions` list (card
+  split into a nav `<Link>` + an action bar; ghost-red Delete).
+- Admin entry point: Edit + Delete in the `/admin` Submissions
+  expandable detail row.
+- All deletes go through the existing `useToast().confirm()` modal
+  (destructive) → success toast → list/detail refresh or redirect. No
+  `window.confirm`.
+
+**Changed**
+- `VisitForm` takes an optional `editSubmission`: prefilled state,
+  `PATCH` on save ("Save changes", no "start another"), routes back to
+  the detail; draft effects guarded by `isEdit`.
+- Inner-app header logo swapped to the official Wenger brand wordmark —
+  new asset **`public/logo-brand-white.png`** (from
+  `docs/Wenger Brand Logo_white.png`, 1457×641, white-on-transparent),
+  intrinsic `width/height` set on `next/image`. Login + `/set-password`
+  keep `/logo-white.png` (scoped to the inner shell only). Same
+  white-logo-left brand placement — asset swap, not a rule change, so
+  CLAUDE.md's brand section is untouched.
+
+**Notes / verification**
+- **Zero new dependencies, zero new env vars, zero schema migrations**
+  (`updatedAt` already on the table since Cycle 5). One new committed
+  asset (the brand logo) — flagged above.
+- `npm run build` clean (21 routes; new `/submissions/[id]/edit` dynamic
+  + updated `/api/submissions/[id]`); `tsc --noEmit` clean per checkpoint.
+- Local **no-mutation** smoke (DB untouched, honoring the seed
+  guardrail): unauth `PATCH`/`DELETE` `/api/submissions/[id]` and the
+  edit page all 302 → `/` (middleware = defense line 1; the route's
+  `authorizeForRow` 401/403 is line 2, same proven Cycle 6/7 pattern).
+- The authenticated owner/admin matrix (rep edits/deletes only own; rep
+  403 on others'; admin edits/deletes any without reassigning the row's
+  rep; toast-confirm delete) is the **in-browser portion of the live
+  check** — no DB writes were made locally, so the seed (7 users, only
+  `mark.mireles` `password_set`, `BHrdlichka=1`) is unchanged and Mark's
+  private password untouched. JWT type-augmentation casts untouched.
+- Checkpoint-committed (1 plan/docs, 2 API, 3 form+route, 4 rep UI,
+  5 admin UI, + logo). Live: https://valkolimark-wenger-field-notes.vercel.app
+
 ## Cycle 9 — Polish & launch (2026-05-18)
 
 Final polish and launch handoff. The team starts using the app on the existing `vercel.app` URL (custom domain deferred per request).

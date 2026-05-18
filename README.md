@@ -116,6 +116,15 @@ only their own submissions; admins are scoped the same on `/submissions`
 (the admin "see all" view ships in Cycle 7). No edit/delete or photo
 upload yet.
 
+**Cycle 10:** reps can **edit and delete their own** submissions and
+admins **any** submission — Edit/Delete on the `/submissions` list and
+`/submissions/[id]` detail (rep) and the `/admin` Submissions expandable
+row (admin). Editing reuses the visit form, prefilled, at
+`/submissions/[id]/edit`; `PATCH` + `DELETE /api/submissions/[id]`
+enforce owner-or-admin server-side (an admin edit never reassigns the
+row's rep). Deletes go through the in-app confirm modal. Still no photo
+upload.
+
 ### Project conventions
 
 See `CLAUDE.md` for the full project rules. Highlights:
@@ -147,6 +156,10 @@ See `CLAUDE.md` for the full project rules. Highlights:
 Cycle 9 (Polish & launch) shipped: system sans-serif throughout,
 accessible button hierarchy, toast/confirm system, loading skeletons,
 empty states, and error boundaries on every screen.
+
+Cycle 10 added **edit & delete for submissions** (reps: own; admins:
+any) and refreshed the in-app header with the official Wenger brand
+wordmark.
 
 ---
 
