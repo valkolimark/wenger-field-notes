@@ -161,6 +161,11 @@ Cycle 10 added **edit & delete for submissions** (reps: own; admins:
 any) and refreshed the in-app header with the official Wenger brand
 wordmark.
 
+Cycle 11 made the app an **installable standalone PWA** — Add to Home
+Screen on iOS/Android for a native-feeling, full-screen experience
+(Wenger-navy chrome, notch/home-indicator safe, app icon). The header is
+now layout-aware (edge-to-edge on the full-bleed map, boxed elsewhere).
+
 ---
 
 ## License

@@ -6,6 +6,77 @@ Format: `## Cycle N — Title (YYYY-MM-DD)` followed by a short prose summary, t
 
 ---
 
+## Cycle 11 — Standalone/PWA presentation polish (2026-05-18)
+
+The app installs to the home screen as a standalone PWA with the Wenger
+navy chrome, safe-area handling, and a layout-aware header. Second slice
+of the post-launch split (Cycle 10 = edit/delete).
+
+**Decisions:**
+- **App icons from a provided source:** the user supplied
+  `images/W__blue circle.png` (887×938, alpha) — a square "W" circle
+  mark. Generated `public/icon-192.png` / `icon-512.png` /
+  `apple-touch-icon.png` via `sips` (center-crop to square → resize, no
+  distortion, **zero deps**). Source kept under `images/` (not shipped).
+- **Manifest** via Next `app/manifest.ts` (typed metadata route, no dep)
+  over a static JSON.
+- **Adaptive-header signal:** one centralized route classifier
+  (`lib/layout-mode.ts`), read by the header via `usePathname()` — not
+  per-page hardcoding. `/map` is the only full-bleed route today.
+- **statusBarStyle `default`** (not `black-translucent`): the OS keeps
+  the status bar reserved (themed by theme-color), guaranteeing the navy
+  header never underlaps it on any device — "no overlap" over maximal
+  immersion.
+
+**Added**
+- `src/app/manifest.ts` → `/manifest.webmanifest`: `standalone`,
+  `start_url`/`scope` `/`, `theme_color`/`background_color` `#0A3758`,
+  name "Wenger Field Notes" / short "Field Notes", portrait, icons
+  (192 any, 512 any, 512 maskable).
+- `public/icon-192.png`, `public/icon-512.png`,
+  `public/apple-touch-icon.png` (generated; **new committed assets**,
+  flagged).
+- `src/lib/layout-mode.ts` — `isFullWidthRoute()` single source of truth
+  (prefix match; `/map` today).
+
+**Changed**
+- Root `layout.tsx`: new `viewport` export — `viewportFit: "cover"` +
+  `themeColor: "#0A3758"` + `width/initialScale`; `metadata.appleWebApp`
+  (capable, title "Field Notes", `statusBarStyle: "default"`) +
+  `metadata.icons.apple`. (Next auto-injects the `<link rel="manifest">`.)
+- `AppHeader`: layout-aware — full-bleed routes drop `mx-auto max-w-3xl`
+  so the logo sits flush far-left and the user menu flush far-right
+  (px-4 inset kept for notch/rounded corners); boxed routes unchanged.
+- `middleware.ts`: static-asset allowlist extended with
+  `manifest.webmanifest` + the three icon PNGs (same pattern as the
+  logos) so install/icons resolve **pre-auth** (e.g. installing from the
+  login screen) instead of 302→`/`.
+
+**Notes / verification**
+- **Zero new dependencies, zero new env vars, zero schema migrations.**
+  New committed assets: 3 icon PNGs (flagged above).
+- **Safe-area:** the shell already used `env(safe-area-inset-*)`
+  (header `pt`, tab bar `pb`, main `calc(...)`, map fixed layer, save
+  bar, toast stack). The missing piece was `viewport-fit=cover` (now
+  set) which *activates* those insets in standalone — no other
+  safe-area code change was needed; verified by inspection.
+- `npm run build` clean (22 routes incl. `○ /manifest.webmanifest`);
+  `tsc --noEmit` clean per checkpoint.
+- Live verification: `/manifest.webmanifest` 200 + correct JSON, the
+  three icons 200 `image/png` (reachable pre-auth), and the login HTML
+  carries `<link rel=manifest>`, `theme-color #0A3758`,
+  `viewport ... viewport-fit=cover`, `apple-mobile-web-app-*`,
+  `apple-touch-icon`.
+- **On-device portion of the live check** (the team's phones): installed
+  standalone on iOS (Add to Home Screen) + Android shows no
+  overlap/offscreen/resize glitch; full-bleed `/map` header edge-to-edge
+  vs boxed elsewhere; 375px unaffected. The adaptive-header logic + meta
+  tags are verified here; the standalone visual is inherently a
+  device-install check.
+- Checkpoint-committed (A manifest/icons/viewport, C adaptive header;
+  B safe-area = verify-only no-op). Live:
+  https://valkolimark-wenger-field-notes.vercel.app
+
 ## Cycle 10 — Edit & delete submissions (2026-05-18)
 
 Reps can now edit and delete their **own** submissions; admins can edit
