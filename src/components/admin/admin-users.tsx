@@ -3,10 +3,13 @@
 import { useCallback, useEffect, useState } from "react";
 import { useSession } from "next-auth/react";
 import { AdminNav } from "./admin-nav";
+import { Button } from "@/components/ui/button";
+import { useToast } from "@/components/ui/toast";
+import { RowsSkeleton } from "@/components/ui/skeleton";
 import type { AdminUserDTO } from "@/lib/admin";
 
 const inputCls =
-  "h-10 w-full rounded-lg border border-black/10 bg-white px-3 text-sm text-brand-navy outline-none focus-visible:border-brand-navy/40";
+  "h-11 w-full rounded-lg border border-black/10 bg-white px-3 text-sm text-brand-navy outline-none focus-visible:border-brand-navy/40";
 
 async function api(
   url: string,
@@ -16,7 +19,10 @@ async function api(
     const res = await fetch(url, init);
     if (!res.ok) {
       const d = (await res.json().catch(() => ({}))) as { error?: string };
-      return { ok: false, msg: d.error || "Something went wrong — try again." };
+      return {
+        ok: false,
+        msg: d.error || "Something went wrong — try again.",
+      };
     }
     return { ok: true };
   } catch {
@@ -27,10 +33,10 @@ async function api(
 export function AdminUsers() {
   const { data: session } = useSession();
   const selfRepId = session?.user?.repId;
+  const { success, error: toastError, confirm } = useToast();
 
   const [users, setUsers] = useState<AdminUserDTO[]>([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
 
   const [adding, setAdding] = useState(false);
   const [add, setAdd] = useState({
@@ -56,13 +62,12 @@ export function AdminUsers() {
       if (!res.ok) throw new Error();
       const d = await res.json();
       setUsers(d.users ?? []);
-      setError(null);
     } catch {
-      setError("Couldn't load users — try again.");
+      toastError("Couldn't load users — try again.");
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [toastError]);
 
   useEffect(() => {
     void refresh();
@@ -74,10 +79,10 @@ export function AdminUsers() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(add),
     });
-    if (!r.ok) return setError(r.msg);
+    if (!r.ok) return toastError(r.msg);
     setAdding(false);
     setAdd({ email: "", name: "", repId: "", role: "rep" });
-    setError(null);
+    success("User added");
     void refresh();
   }
 
@@ -96,24 +101,24 @@ export function AdminUsers() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(edit),
     });
-    if (!r.ok) return setError(r.msg);
+    if (!r.ok) return toastError(r.msg);
     setEditId(null);
-    setError(null);
+    success("User updated");
     void refresh();
   }
 
   async function resetPw(u: AdminUserDTO) {
-    if (
-      !window.confirm(
-        `Reset ${u.email}'s password to the bootstrap password? They'll be forced to change it on next login.`,
-      )
-    )
-      return;
+    const ok = await confirm({
+      title: `Reset ${u.email}'s password?`,
+      body: "They'll get the bootstrap password and be forced to change it on next login.",
+      confirmLabel: "Reset password",
+    });
+    if (!ok) return;
     const r = await api(`/api/admin/users/${u.id}/reset-password`, {
       method: "POST",
     });
-    if (!r.ok) return setError(r.msg);
-    setError(null);
+    if (!r.ok) return toastError(r.msg);
+    success("Password reset");
     void refresh();
   }
 
@@ -126,17 +131,22 @@ export function AdminUsers() {
       headers: { "Content-Type": "application/json" },
       body: body ? JSON.stringify(body) : undefined,
     });
-    if (!r.ok) return setError(r.msg);
+    if (!r.ok) return toastError(r.msg);
     setDelUser(null);
     setReassignTo("");
-    setError(null);
+    success("User deleted");
     void refresh();
   }
 
-  function onDeleteClick(u: AdminUserDTO) {
+  async function onDeleteClick(u: AdminUserDTO) {
     if (u.submissionCount === 0) {
-      if (window.confirm(`Delete ${u.email}? This can't be undone.`))
-        void doDelete(u);
+      const ok = await confirm({
+        title: `Delete ${u.email}?`,
+        body: "This can't be undone.",
+        confirmLabel: "Delete",
+        destructive: true,
+      });
+      if (ok) void doDelete(u);
       return;
     }
     setReassignTo("");
@@ -148,23 +158,13 @@ export function AdminUsers() {
       <h1 className="text-3xl text-brand-navy">Admin</h1>
       <AdminNav />
 
-      {error && (
-        <div
-          role="alert"
-          className="mb-4 rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700"
-        >
-          {error}
-        </div>
-      )}
-
       <div className="mb-4">
-        <button
-          type="button"
+        <Button
+          variant={adding ? "secondary" : "primary"}
           onClick={() => setAdding((a) => !a)}
-          className="h-10 rounded-xl bg-brand-navy px-4 text-sm font-semibold text-white hover:bg-brand-navy-light"
         >
           {adding ? "Cancel" : "Add user"}
-        </button>
+        </Button>
       </div>
 
       {adding && (
@@ -195,18 +195,18 @@ export function AdminUsers() {
             <option value="rep">rep</option>
             <option value="admin">admin</option>
           </select>
-          <button
-            type="button"
+          <Button
+            variant="primary"
+            className="w-full"
             onClick={submitAdd}
-            className="h-10 w-full rounded-xl bg-brand-navy text-sm font-semibold text-white hover:bg-brand-navy-light"
           >
             Create user (bootstrap password)
-          </button>
+          </Button>
         </div>
       )}
 
       {loading ? (
-        <p className="text-sm text-brand-navy/45">Loading…</p>
+        <RowsSkeleton rows={6} />
       ) : (
         <ul className="space-y-3">
           {users.map((u) => {
@@ -260,20 +260,20 @@ export function AdminUsers() {
                       </p>
                     )}
                     <div className="flex gap-2">
-                      <button
-                        type="button"
+                      <Button
+                        variant="primary"
+                        className="flex-1"
                         onClick={() => submitEdit(u.id)}
-                        className="h-9 flex-1 rounded-lg bg-brand-navy text-sm font-semibold text-white"
                       >
                         Save
-                      </button>
-                      <button
-                        type="button"
+                      </Button>
+                      <Button
+                        variant="secondary"
+                        className="flex-1"
                         onClick={() => setEditId(null)}
-                        className="h-9 flex-1 rounded-lg border border-black/10 text-sm font-medium text-brand-navy"
                       >
                         Cancel
-                      </button>
+                      </Button>
                     </div>
                   </div>
                 ) : (
@@ -307,28 +307,28 @@ export function AdminUsers() {
                       {isSelf ? " · you" : ""}
                     </p>
                     <div className="mt-3 flex flex-wrap gap-2">
-                      <button
-                        type="button"
+                      <Button
+                        variant="secondary"
+                        className="h-9 px-3 text-sm"
                         onClick={() => startEdit(u)}
-                        className="h-9 rounded-lg border border-black/10 px-3 text-sm font-medium text-brand-navy hover:border-brand-navy/30"
                       >
                         Edit
-                      </button>
-                      <button
-                        type="button"
+                      </Button>
+                      <Button
+                        variant="secondary"
+                        className="h-9 px-3 text-sm"
                         onClick={() => resetPw(u)}
-                        className="h-9 rounded-lg border border-black/10 px-3 text-sm font-medium text-brand-navy hover:border-brand-navy/30"
                       >
                         Reset password
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => onDeleteClick(u)}
+                      </Button>
+                      <Button
+                        variant="destructive"
+                        className="h-9 px-3 text-sm"
                         disabled={isSelf}
-                        className="h-9 rounded-lg border border-red-200 px-3 text-sm font-medium text-red-600 hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-40"
+                        onClick={() => onDeleteClick(u)}
                       >
                         Delete
-                      </button>
+                      </Button>
                     </div>
                   </>
                 )}
@@ -339,12 +339,23 @@ export function AdminUsers() {
       )}
 
       {delUser && (
-        <div className="fixed inset-0 z-[1000] flex items-end justify-center bg-black/30 p-4 sm:items-center">
-          <div className="w-full max-w-sm rounded-2xl bg-white p-5">
-            <h2 className="text-xl text-brand-navy">
+        <div
+          className="fixed inset-0 z-[1000] flex items-end justify-center bg-black/40 p-4 sm:items-center"
+          onClick={() => {
+            setDelUser(null);
+            setReassignTo("");
+          }}
+        >
+          <div
+            role="dialog"
+            aria-modal="true"
+            onClick={(e) => e.stopPropagation()}
+            className="w-full max-w-sm animate-pop rounded-2xl bg-white p-5 shadow-2xl"
+          >
+            <h2 className="text-xl font-semibold text-brand-navy">
               Delete {delUser.name || delUser.email}
             </h2>
-            <p className="mt-2 text-sm text-brand-navy/70">
+            <p className="mt-2 text-sm leading-relaxed text-brand-navy/70">
               This user has {delUser.submissionCount} submission
               {delUser.submissionCount === 1 ? "" : "s"}. Reassign them to
               another user, or delete them along with the user.
@@ -363,40 +374,39 @@ export function AdminUsers() {
                   </option>
                 ))}
             </select>
-            <button
-              type="button"
+            <Button
+              variant="primary"
+              className="mt-3 w-full"
               disabled={!reassignTo}
-              onClick={() =>
-                doDelete(delUser, { reassignTo })
-              }
-              className="mt-3 h-10 w-full rounded-xl bg-brand-navy text-sm font-semibold text-white hover:bg-brand-navy-light disabled:opacity-40"
+              onClick={() => doDelete(delUser, { reassignTo })}
             >
               Reassign &amp; delete user
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                if (
-                  window.confirm(
-                    `Delete this user AND permanently delete all ${delUser.submissionCount} of their submissions? This can't be undone.`,
-                  )
-                )
-                  void doDelete(delUser, { deleteSubmissions: true });
+            </Button>
+            <Button
+              variant="destructive"
+              className="mt-2 w-full"
+              onClick={async () => {
+                const ok = await confirm({
+                  title: "Delete user and all submissions?",
+                  body: `Permanently delete this user and all ${delUser.submissionCount} of their submissions. This can't be undone.`,
+                  confirmLabel: "Delete everything",
+                  destructive: true,
+                });
+                if (ok) void doDelete(delUser, { deleteSubmissions: true });
               }}
-              className="mt-2 h-10 w-full rounded-xl border border-red-200 text-sm font-medium text-red-600 hover:bg-red-50"
             >
               Delete user &amp; all submissions
-            </button>
-            <button
-              type="button"
+            </Button>
+            <Button
+              variant="ghost"
+              className="mt-2 w-full"
               onClick={() => {
                 setDelUser(null);
                 setReassignTo("");
               }}
-              className="mt-2 h-10 w-full rounded-xl text-sm font-medium text-brand-navy/60"
             >
               Cancel
-            </button>
+            </Button>
           </div>
         </div>
       )}

@@ -10,6 +10,8 @@ import {
 } from "lucide-react";
 import type { Submission } from "@/lib/submissions";
 import type { AdminUserDTO } from "@/lib/admin";
+import { Button, buttonClass } from "@/components/ui/button";
+import { RowsSkeleton } from "@/components/ui/skeleton";
 import { AdminNav } from "./admin-nav";
 
 type Row = Submission & { createdAt: string };
@@ -193,58 +195,53 @@ export function AdminSubmissions() {
             </option>
           ))}
         </select>
-        <a
-          href={exportHref}
-          className="inline-flex h-11 items-center gap-2 rounded-xl bg-brand-navy px-4 text-sm font-semibold text-white transition-colors hover:bg-brand-navy-light"
-        >
+        <a href={exportHref} className={buttonClass("primary")}>
           <Download size={16} aria-hidden />
           Export CSV
         </a>
-        <button
-          type="button"
+        <Button
+          variant="secondary"
           onClick={() => runSummary("pipeline")}
           disabled={sumStreaming}
-          className="inline-flex h-11 items-center gap-2 rounded-xl border border-brand-navy/20 bg-white px-4 text-sm font-semibold text-brand-navy transition-colors hover:border-brand-navy/40 disabled:opacity-50"
         >
           <Sparkles size={16} aria-hidden />
           Summarize pipeline
-        </button>
-        <button
-          type="button"
+        </Button>
+        <Button
+          variant="secondary"
           onClick={() => runSummary("rep")}
           disabled={sumStreaming || !repFilter}
           title={!repFilter ? "Select a rep first" : undefined}
-          className="inline-flex h-11 items-center gap-2 rounded-xl border border-brand-navy/20 bg-white px-4 text-sm font-semibold text-brand-navy transition-colors hover:border-brand-navy/40 disabled:opacity-50"
         >
           <Sparkles size={16} aria-hidden />
           Per-rep summary
-        </button>
+        </Button>
       </div>
 
       {sumOpen && (
-        <div className="mb-5 rounded-2xl border border-brand-navy/15 bg-white p-4">
+        <div className="mb-5 animate-fade-in-soft rounded-2xl border border-brand-navy/15 bg-white p-4">
           <div className="flex items-center justify-between gap-3">
-            <h2 className="text-lg text-brand-navy">
+            <h2 className="text-lg font-semibold text-brand-navy">
               {sumTitle}
             </h2>
             <div className="flex items-center gap-1">
-              <button
-                type="button"
+              <Button
+                variant="ghost"
                 onClick={() => runSummary(lastScopeRef.current)}
                 disabled={sumStreaming}
                 aria-label="Regenerate"
-                className="grid h-9 w-9 place-items-center rounded-lg text-brand-navy/60 hover:bg-black/5 hover:text-brand-navy disabled:opacity-40"
+                className="h-9 w-9 px-0"
               >
                 <RotateCw size={16} aria-hidden />
-              </button>
-              <button
-                type="button"
+              </Button>
+              <Button
+                variant="ghost"
                 onClick={closeSummary}
                 aria-label="Close"
-                className="grid h-9 w-9 place-items-center rounded-lg text-brand-navy/60 hover:bg-black/5 hover:text-brand-navy"
+                className="h-9 w-9 px-0"
               >
                 <X size={16} aria-hidden />
-              </button>
+              </Button>
             </div>
           </div>
           {sumError ? (
@@ -261,20 +258,24 @@ export function AdminSubmissions() {
       )}
 
       {loading ? (
-        <p className="text-sm text-brand-navy/45">Loading…</p>
+        <RowsSkeleton rows={4} />
       ) : error ? (
         <div className="flex items-center justify-between gap-3 rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
           <span>{error}</span>
-          <button
-            type="button"
+          <Button
+            variant="ghost"
             onClick={() => load()}
-            className="font-semibold underline"
+            className="h-8 px-2 text-sm text-red-700"
           >
             Try again
-          </button>
+          </Button>
         </div>
       ) : subs.length === 0 ? (
-        <p className="text-sm text-brand-navy/55">No submissions.</p>
+        <p className="mt-8 text-center text-sm text-brand-navy/55">
+          {repFilter
+            ? "No submissions match this filter — try clearing the rep filter."
+            : "No submissions yet. They'll appear here as reps log visits."}
+        </p>
       ) : (
         <ul className="space-y-3">
           {subs.map((s) => {
