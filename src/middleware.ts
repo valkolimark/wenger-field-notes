@@ -36,7 +36,8 @@ export default auth((req) => {
   const isAdminArea =
     path === "/admin" ||
     path.startsWith("/admin/") ||
-    path.startsWith("/api/admin");
+    path.startsWith("/api/admin") ||
+    path.startsWith("/api/summarize");
   if (isAdminArea && req.auth?.user?.role !== "admin") {
     if (path.startsWith("/api/")) {
       return Response.json({ error: "Forbidden" }, { status: 403 });
