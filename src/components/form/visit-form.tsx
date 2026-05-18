@@ -2,9 +2,11 @@
 
 import { useEffect, useReducer, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { ArrowLeft, Check } from "lucide-react";
+import { ArrowLeft } from "lucide-react";
 import type { School } from "@/lib/schools";
 import { useSession } from "next-auth/react";
+import { Button } from "@/components/ui/button";
+import { useToast } from "@/components/ui/toast";
 import { CollapsibleSection } from "./collapsible-section";
 import { RadioGroup, CheckboxGroup, TextField, TextArea } from "./fields";
 import {
@@ -69,6 +71,7 @@ function reducer(state: VisitFormData, action: Action): VisitFormData {
 export function VisitForm({ school }: { school: School }) {
   const router = useRouter();
   const { data: session } = useSession();
+  const { success, confirm } = useToast();
   const repId = session?.user?.repId ?? "";
   const repName = session?.user?.name ?? session?.user?.email ?? "";
 
@@ -112,9 +115,15 @@ export function VisitForm({ school }: { school: School }) {
     setDraftAt(null);
   }
 
-  function handleBack() {
-    if (isDirty && !window.confirm("You have unsaved changes — discard?")) {
-      return;
+  async function handleBack() {
+    if (isDirty) {
+      const ok = await confirm({
+        title: "Discard unsaved changes?",
+        body: "Your edits to this visit haven't been saved.",
+        confirmLabel: "Discard",
+        destructive: true,
+      });
+      if (!ok) return;
     }
     router.push("/map");
   }
@@ -168,6 +177,7 @@ export function VisitForm({ school }: { school: School }) {
     // Only now is it safe to drop the local draft.
     clearDraft(repId, school.id);
     setSaved(true);
+    success("Visit saved");
     setTimeout(
       () => router.push(then === "map" ? "/map" : "/submissions"),
       then === "map" ? 900 : 1600,
@@ -191,6 +201,9 @@ export function VisitForm({ school }: { school: School }) {
         </h1>
         <p className="mt-1 text-sm text-brand-navy/55">
           {school.address}, {school.city}
+        </p>
+        <p className="mt-1 text-xs text-brand-navy/40">
+          Your progress auto-saves as a draft on this device.
         </p>
       </header>
 
@@ -437,36 +450,27 @@ export function VisitForm({ school }: { school: School }) {
               {saveError}
             </p>
           )}
-          <button
+          <Button
             type="button"
+            variant="primary"
+            size="lg"
             onClick={() => save("list")}
             disabled={saving}
-            className="flex h-12 w-full items-center justify-center rounded-xl bg-brand-navy px-5 text-sm font-semibold text-white transition-colors duration-200 hover:bg-brand-navy-light focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-navy disabled:opacity-60"
+            className="w-full"
           >
             {saving ? "Saving…" : "Save submission"}
-          </button>
-          <button
+          </Button>
+          <Button
             type="button"
+            variant="ghost"
             onClick={() => save("map")}
             disabled={saving}
-            className="text-xs font-medium text-brand-navy/60 transition-colors hover:text-brand-navy disabled:opacity-60"
+            className="h-9 text-xs"
           >
             Save &amp; start another visit
-          </button>
+          </Button>
         </div>
       </div>
-
-      {saved && (
-        <div
-          role="status"
-          className="fixed inset-x-0 top-[calc(4rem_+_env(safe-area-inset-top))] z-40 flex justify-center px-4"
-        >
-          <div className="flex items-center gap-2 rounded-full bg-brand-navy px-4 py-2 text-sm font-medium text-white shadow-lg">
-            <Check size={16} aria-hidden />
-            Visit saved
-          </div>
-        </div>
-      )}
     </div>
   );
 }
