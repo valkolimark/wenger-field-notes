@@ -41,10 +41,10 @@ export function AppHeader() {
     <header className="fixed inset-x-0 top-0 z-30 bg-brand-navy pt-[env(safe-area-inset-top)]">
       <div className="mx-auto flex h-14 w-full max-w-3xl items-center justify-between px-4">
         <Image
-          src="/logo-white.png"
+          src="/logo-brand-white.png"
           alt="Wenger Corporation"
-          width={800}
-          height={450}
+          width={1457}
+          height={641}
           priority
           className="h-7 w-auto"
         />
