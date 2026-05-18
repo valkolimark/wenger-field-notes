@@ -24,7 +24,7 @@ export function CollapsibleSection({
         aria-controls={panelId}
         className="flex min-h-[52px] w-full items-center justify-between gap-3 px-4 py-3 text-left"
       >
-        <span className="font-display text-lg text-brand-navy">{title}</span>
+        <span className="text-lg text-brand-navy">{title}</span>
         <ChevronDown
           size={20}
           aria-hidden

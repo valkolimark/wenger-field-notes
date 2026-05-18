@@ -44,7 +44,7 @@ export default function LoginPage() {
           priority
           className="h-20 w-auto"
         />
-        <h1 className="mt-5 font-display text-lg italic text-white">
+        <h1 className="mt-5 text-lg italic text-white">
           Field Notes
         </h1>
         <p className="mt-2 text-sm text-white/70">Sign in to continue</p>

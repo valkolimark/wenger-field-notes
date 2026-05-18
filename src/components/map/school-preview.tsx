@@ -42,7 +42,7 @@ export function SchoolPreview({
         </div>
 
         <div className="flex items-start justify-between gap-3 px-5 pb-1 pt-3 md:pt-6">
-          <h2 className="font-display text-2xl leading-tight text-brand-navy">
+          <h2 className="text-2xl leading-tight text-brand-navy">
             {school.name}
           </h2>
           <button

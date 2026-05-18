@@ -45,7 +45,7 @@ export function SubmissionsList() {
 
   return (
     <section>
-      <h1 className="font-display text-3xl text-brand-navy">My Submissions</h1>
+      <h1 className="text-3xl text-brand-navy">My Submissions</h1>
 
       {error && (
         <div className="mt-4 flex items-center justify-between gap-3 rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
@@ -85,7 +85,7 @@ export function SubmissionsList() {
               >
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-2">
-                    <h2 className="truncate font-display text-lg text-brand-navy">
+                    <h2 className="truncate text-lg text-brand-navy">
                       {s.schoolName}
                     </h2>
                     <span className="shrink-0 rounded-full bg-brand-navy/8 px-2 py-0.5 text-[11px] font-medium text-brand-navy">

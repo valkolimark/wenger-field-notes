@@ -18,7 +18,7 @@ export default function SetPasswordPage() {
           priority
           className="h-20 w-auto"
         />
-        <h1 className="mt-5 font-display text-lg italic text-white">
+        <h1 className="mt-5 text-lg italic text-white">
           Set your password
         </h1>
         <p className="mt-2 text-center text-sm text-white/70">

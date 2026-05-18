@@ -159,7 +159,7 @@ export function AdminSubmissions() {
 
   return (
     <div className="pb-10">
-      <h1 className="font-display text-3xl text-brand-navy">Admin</h1>
+      <h1 className="text-3xl text-brand-navy">Admin</h1>
       <AdminNav />
 
       <div className="mb-4 flex flex-wrap gap-3">
@@ -224,7 +224,7 @@ export function AdminSubmissions() {
       {sumOpen && (
         <div className="mb-5 rounded-2xl border border-brand-navy/15 bg-white p-4">
           <div className="flex items-center justify-between gap-3">
-            <h2 className="font-display text-lg text-brand-navy">
+            <h2 className="text-lg text-brand-navy">
               {sumTitle}
             </h2>
             <div className="flex items-center gap-1">
@@ -291,7 +291,7 @@ export function AdminSubmissions() {
                 >
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2">
-                      <span className="truncate font-display text-lg text-brand-navy">
+                      <span className="truncate text-lg text-brand-navy">
                         {s.schoolName}
                       </span>
                       <span className="shrink-0 rounded-full bg-brand-navy/8 px-2 py-0.5 text-[11px] font-medium text-brand-navy">

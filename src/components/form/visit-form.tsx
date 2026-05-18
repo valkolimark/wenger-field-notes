@@ -186,7 +186,7 @@ export function VisitForm({ school }: { school: School }) {
       </button>
 
       <header className="mt-4">
-        <h1 className="font-display text-3xl leading-tight text-brand-navy">
+        <h1 className="text-3xl leading-tight text-brand-navy">
           {school.name}
         </h1>
         <p className="mt-1 text-sm text-brand-navy/55">

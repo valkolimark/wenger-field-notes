@@ -14,10 +14,9 @@
   --color-danger-dark: #8f1d13;
   --color-danger-soft: #fdecea;
 
-  /* --- Typography: system stack for UI, Georgia serif for display only --- */
+  /* --- Typography: system sans stack everywhere (Cycle 9 — no serif) --- */
   --font-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto,
     Helvetica, Arial, sans-serif;
-  --font-display: Georgia, "Times New Roman", serif;
 
   /* --- Motion: subtle, premium (150-250ms ease-out; mount fade is longer) --- */
   --animate-fade-in: fade-in 400ms ease-out both;

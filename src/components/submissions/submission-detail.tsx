@@ -82,7 +82,7 @@ export function SubmissionDetail({ id }: { id: string }) {
     return (
       <section>
         {backLink}
-        <h1 className="mt-4 font-display text-3xl text-brand-navy">
+        <h1 className="mt-4 text-3xl text-brand-navy">
           Submission not found
         </h1>
         <p className="mt-3 text-sm leading-relaxed text-brand-navy/60">
@@ -118,7 +118,7 @@ export function SubmissionDetail({ id }: { id: string }) {
       {backLink}
 
       <header className="mt-4">
-        <h1 className="font-display text-3xl leading-tight text-brand-navy">
+        <h1 className="text-3xl leading-tight text-brand-navy">
           {s.schoolName}
         </h1>
         <p className="mt-1 text-sm text-brand-navy/55">

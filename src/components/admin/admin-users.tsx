@@ -145,7 +145,7 @@ export function AdminUsers() {
 
   return (
     <div className="pb-10">
-      <h1 className="font-display text-3xl text-brand-navy">Admin</h1>
+      <h1 className="text-3xl text-brand-navy">Admin</h1>
       <AdminNav />
 
       {error && (
@@ -341,7 +341,7 @@ export function AdminUsers() {
       {delUser && (
         <div className="fixed inset-0 z-[1000] flex items-end justify-center bg-black/30 p-4 sm:items-center">
           <div className="w-full max-w-sm rounded-2xl bg-white p-5">
-            <h2 className="font-display text-xl text-brand-navy">
+            <h2 className="text-xl text-brand-navy">
               Delete {delUser.name || delUser.email}
             </h2>
             <p className="mt-2 text-sm text-brand-navy/70">

@@ -83,7 +83,7 @@ function Section({
 }) {
   return (
     <section className="rounded-2xl border border-black/8 bg-white p-5">
-      <h2 className="font-display text-lg text-brand-navy">{title}</h2>
+      <h2 className="text-lg text-brand-navy">{title}</h2>
       <div className="mt-4 space-y-4">{children}</div>
     </section>
   );
@@ -167,7 +167,7 @@ export function AccountForm({
 
   return (
     <div className="pb-10">
-      <h1 className="font-display text-3xl text-brand-navy">Account</h1>
+      <h1 className="text-3xl text-brand-navy">Account</h1>
       <p className="mt-1 text-sm text-brand-navy/55">
         Update your name, email, or password.
       </p>
