@@ -1,11 +1,13 @@
 "use client";
 
+import { useState } from "react";
 import Link from "next/link";
-import { Map as MapIcon, ChevronRight } from "lucide-react";
+import { Map as MapIcon, ChevronRight, Pencil, Trash2 } from "lucide-react";
 import { useSession } from "next-auth/react";
 import { schools } from "@/lib/schools";
 import { formatVisitDate } from "@/lib/submissions";
-import { buttonClass } from "@/components/ui/button";
+import { Button, buttonClass } from "@/components/ui/button";
+import { useToast } from "@/components/ui/toast";
 import { RowsSkeleton } from "@/components/ui/skeleton";
 import { useSubmissions } from "./use-submissions";
 
@@ -17,7 +19,32 @@ function priorityShort(visitPriority: string): string {
 
 export function SubmissionsList() {
   const { data: session } = useSession();
+  const { success, error: toastError, confirm } = useToast();
   const { submissions, loading, error, refresh } = useSubmissions();
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+
+  async function handleDelete(sid: string) {
+    const ok = await confirm({
+      title: "Delete this visit?",
+      body: "This permanently removes the submission. This can't be undone.",
+      confirmLabel: "Delete",
+      destructive: true,
+    });
+    if (!ok || deletingId) return;
+    setDeletingId(sid);
+    try {
+      const res = await fetch(`/api/submissions/${sid}`, {
+        method: "DELETE",
+      });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      success("Visit deleted");
+      await refresh();
+    } catch {
+      toastError("Couldn't delete this visit — please try again.");
+    } finally {
+      setDeletingId(null);
+    }
+  }
 
   // Cycle 6: /submissions is the rep-facing tab. The API returns all rows
   // for admins (for Cycle 7's /admin), so here we still show each user
@@ -64,10 +91,13 @@ export function SubmissionsList() {
       ) : (
         <ul className="mt-5 space-y-3">
           {visible.map((s) => (
-            <li key={s.id}>
+            <li
+              key={s.id}
+              className="overflow-hidden rounded-2xl border border-black/8 bg-white transition-colors hover:border-brand-navy/25"
+            >
               <Link
                 href={`/submissions/${s.id}`}
-                className="flex items-center gap-3 rounded-2xl border border-black/8 bg-white p-4 transition-colors hover:border-brand-navy/25"
+                className="flex items-center gap-3 p-4"
               >
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-2">
@@ -96,6 +126,24 @@ export function SubmissionsList() {
                   className="shrink-0 text-brand-navy/35"
                 />
               </Link>
+              <div className="flex gap-1 border-t border-black/8 px-2 py-1.5">
+                <Link
+                  href={`/submissions/${s.id}/edit`}
+                  className={buttonClass("ghost", "md", "flex-1")}
+                >
+                  <Pencil size={15} aria-hidden />
+                  Edit
+                </Link>
+                <Button
+                  variant="ghost"
+                  onClick={() => handleDelete(s.id)}
+                  disabled={deletingId === s.id}
+                  className="flex-1 text-danger hover:bg-danger/5 hover:text-danger"
+                >
+                  <Trash2 size={15} aria-hidden />
+                  {deletingId === s.id ? "Deleting…" : "Delete"}
+                </Button>
+              </div>
             </li>
           ))}
         </ul>

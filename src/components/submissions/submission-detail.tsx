@@ -2,9 +2,12 @@
 
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
-import { ArrowLeft } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { ArrowLeft, Pencil, Trash2 } from "lucide-react";
 import { schools } from "@/lib/schools";
 import { type Submission, formatVisitDate } from "@/lib/submissions";
+import { Button, buttonClass } from "@/components/ui/button";
+import { useToast } from "@/components/ui/toast";
 import { CollapsibleSection } from "@/components/form/collapsible-section";
 
 const DASH = "—";
@@ -28,8 +31,35 @@ const list = (arr: string[]) => (arr.length ? arr.join(", ") : DASH);
 type Status = "loading" | "ok" | "notfound" | "error";
 
 export function SubmissionDetail({ id }: { id: string }) {
+  const router = useRouter();
+  const { success, error: toastError, confirm } = useToast();
   const [status, setStatus] = useState<Status>("loading");
   const [sub, setSub] = useState<Submission | null>(null);
+  const [deleting, setDeleting] = useState(false);
+
+  // Anyone who can load this detail is owner-or-admin (server-enforced
+  // by GET /api/submissions/[id]); DELETE re-checks the same.
+  async function handleDelete() {
+    const ok = await confirm({
+      title: "Delete this visit?",
+      body: "This permanently removes the submission. This can't be undone.",
+      confirmLabel: "Delete",
+      destructive: true,
+    });
+    if (!ok || deleting) return;
+    setDeleting(true);
+    try {
+      const res = await fetch(`/api/submissions/${id}`, {
+        method: "DELETE",
+      });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      success("Visit deleted");
+      router.push("/submissions");
+    } catch {
+      setDeleting(false);
+      toastError("Couldn't delete this visit — please try again.");
+    }
+  }
 
   const load = useCallback(async () => {
     setStatus("loading");
@@ -126,6 +156,24 @@ export function SubmissionDetail({ id }: { id: string }) {
           {formatVisitDate(s.visitDate)} · Logged by {s.repName}
         </p>
       </header>
+
+      <div className="mt-4 flex gap-2">
+        <Link
+          href={`/submissions/${id}/edit`}
+          className={buttonClass("secondary")}
+        >
+          <Pencil size={16} aria-hidden />
+          Edit
+        </Link>
+        <Button
+          variant="destructive"
+          onClick={handleDelete}
+          disabled={deleting}
+        >
+          <Trash2 size={16} aria-hidden />
+          {deleting ? "Deleting…" : "Delete"}
+        </Button>
+      </div>
 
       {/* Priority block — read-only, mirrors the form's warm distinction */}
       <div className="mt-5 rounded-2xl border border-brand-warm/30 border-l-4 border-l-brand-warm bg-brand-warm-soft/40 px-4 py-5">
