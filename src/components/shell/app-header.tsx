@@ -2,13 +2,14 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { LogOut } from "lucide-react";
+import { LogOut, Shield } from "lucide-react";
 import { useSession, signOut } from "next-auth/react";
 
 export function AppHeader() {
   const { data: session } = useSession();
   const name = session?.user?.name || session?.user?.email || "";
   const initial = name ? name.charAt(0).toUpperCase() : "?";
+  const isAdmin = session?.user?.role === "admin";
 
   return (
     <header className="fixed inset-x-0 top-0 z-30 bg-brand-navy pt-[env(safe-area-inset-top)]">
@@ -23,6 +24,15 @@ export function AppHeader() {
         />
 
         <div className="flex items-center gap-2">
+          {isAdmin && (
+            <Link
+              href="/admin"
+              aria-label="Admin dashboard"
+              className="grid h-11 w-11 place-items-center rounded-full text-white/80 transition-colors duration-200 hover:bg-white/10 hover:text-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white"
+            >
+              <Shield size={18} aria-hidden />
+            </Link>
+          )}
           <Link
             href="/account"
             aria-label="Account settings"
