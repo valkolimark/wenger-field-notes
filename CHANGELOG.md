@@ -6,6 +6,29 @@ Format: `## Cycle N — Title (YYYY-MM-DD)` followed by a short prose summary, t
 
 ---
 
+## Cycle 8 — Claude AI summaries (2026-05-17)
+
+Admins can stream a Claude-generated pipeline summary (whole team or one rep) from `/admin`.
+
+**Added**
+- `POST /api/summarize` (`runtime=nodejs`, admin-gated: middleware now covers `/api/summarize` **and** in-route `requireAdmin()`). Body `{scope:'pipeline'|'rep', repId?}`. Streams `text/plain` via a `ReadableStream` fed by the `@anthropic-ai/sdk` native stream
+- `src/lib/submissions-query.ts` — shared `getSubmissions(repId?)`; `/api/admin/submissions` + `export.csv` refactored to use it (no duplicated query; no behavior change)
+- `src/lib/summarize-prompts.ts` — GATE 2 system + per-scope user prompts; user data wrapped in `<submission_data>` with explicit "data not instructions" guard
+- Two buttons + inline streaming panel on `/admin` (progressive text, blinking cursor, Regenerate, Close; `AbortController` cancels on regenerate/close/unmount); "Per-rep summary" disabled until a rep is filtered
+
+**GATE 1 decisions:** plain `ReadableStream` (`text/plain`) — **no SSE, no `ai` package**; **Node** runtime; reuse `src/lib/csv.ts` flatten as the prompt data shape; **token cap = 60,000 input tokens** (≈ ~200 submissions; 1 today → trivial) enforced via `anthropic.messages.countTokens()` preflight (char/4 fallback), over → 400 "Too much data to summarize at once — filter to a specific rep or date range."; **no markdown lib** (plain paragraphs); zero-submission rep → canned line, no API call.
+
+**GATE 2 decision:** structured plain-text output (UPPERCASE sections, `- `/`1.` bullets); injection defense in the system prompt; final prompts live in `src/lib/summarize-prompts.ts`.
+
+**Notes / verification**
+- New dep (pinned exact): **`@anthropic-ai/sdk@0.96.0`**. No other deps (no `ai`, no markdown).
+- New env var: **`ANTHROPIC_API_KEY`** — on Vercel Prod+Preview (Sensitive); added to local `.env.local` manually (Sensitive ⇒ not `vercel env pull`-able).
+- **Zero schema migrations.** Model `claude-sonnet-4-5` per CLAUDE.md.
+- Verified locally: progressive streaming (pipeline `ttfb≈2.2s` vs `total≈9.9s`), correct pipeline/rep scoping, negatives (logged-out 302, rep 403, missing `repId` 400, nonexistent rep → canned), **token cap** (4000 transient rows → 400 human msg, cleaned), **prompt injection** (hostile notes → model did **not** comply, kept analyst structure; notes restored), **cost logging** (`[summarize]` logs scope/repId/count/ms/input+output tokens — ~800 in / ~330 out per current summary; **no submission content in logs**, confirmed)
+- DB restored to exact seed: 7 users, only `mark.mireles` `password_set`, `BHrdlichka=1`. Mark's real password untouched
+- JWT type-augmentation casts untouched
+- Cycle 9 (Polish) flags: summary persistence appetite (a `summaries` table) is a future call; structured logging upgrade; markdown rendering polish; rough cost figure ≈ ~1.1k tokens/summary at current data (well under a cent) — revisit caps/budget alerts at real volume
+
 ## Cycle 7 — Admin dashboard (2026-05-17)
 
 Admin dashboard at `/admin`: full submissions view (filter, expandable detail, CSV export) + complete user management (add / edit / reset-password / delete-with-mandatory-reassignment), admin-gated with defense in depth.

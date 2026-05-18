@@ -40,7 +40,10 @@ Create `.env.local` in the project root. Variables required per cycle:
   project for Production/Preview/Development. No Resend / email sending.
   `SEED_PASSWORD` is read only by `npm run db:seed` (never committed; pass
   inline locally).
-- **Cycle 8+:** `ANTHROPIC_API_KEY`
+- **Cycle 8+ (active):** `ANTHROPIC_API_KEY` — Claude API key for AI
+  summaries. On Vercel Prod/Preview (mark **Sensitive**); add to local
+  `.env.local` manually (Sensitive ⇒ `vercel env pull` returns it blank).
+  Server-only — never in client code.
 
 **First-time login:** allowlisted users sign in with their email and the
 bootstrap password (`Wenger2026!`). On first login they're forced to
@@ -61,6 +64,13 @@ submissions requires reassigning them to another user or explicitly
 deleting them (atomic). Admins can't change their own role or delete
 themselves. Gated by middleware **and** a server-side check on every
 admin route/page.
+
+**AI summaries (Cycle 8):** on `/admin` the Submissions tab has
+**Summarize pipeline** and **Per-rep summary** buttons — Claude
+(`claude-sonnet-4-5`) streams a structured plain-text analysis of the
+team's (or a rep's) logged visits into an inline panel (Regenerate /
+Close). Server-side input-token cap; summaries are on-demand only (not
+persisted). Requires `ANTHROPIC_API_KEY`.
 
 ### Tech stack
 
