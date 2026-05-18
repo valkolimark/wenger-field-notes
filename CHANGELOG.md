@@ -6,6 +6,38 @@ Format: `## Cycle N — Title (YYYY-MM-DD)` followed by a short prose summary, t
 
 ---
 
+## Cycle 7 — Admin dashboard (2026-05-17)
+
+Admin dashboard at `/admin`: full submissions view (filter, expandable detail, CSV export) + complete user management (add / edit / reset-password / delete-with-mandatory-reassignment), admin-gated with defense in depth.
+
+**Added**
+- Middleware extended: `/admin/*` and `/api/admin/*` require `role==='admin'` (pages→`/map`, APIs→403); runs after the auth/force-change gates
+- `requireAdmin()` helper (session-`repId` derived; per-route check on every admin API — defense in depth)
+- 7 API routes (`runtime=nodejs`, never return/log password hashes): `GET /api/admin/submissions[?repId=]`, `GET /api/admin/submissions/export.csv`, `GET /api/admin/users`, `POST /api/admin/users`, `PATCH /api/admin/users/[id]`, `POST /api/admin/users/[id]/reset-password`, `DELETE /api/admin/users/[id]`
+- `/admin` (submissions: stats, rep filter, CSV export honoring filter, expandable read-only detail) and `/admin/users` (list with role/passwordSet/submissionCount; add; inline edit; reset-password w/ confirm; delete w/ reassignment modal) — both server-role-checked, branded, mobile-first card layouts; `AdminNav` sub-nav
+- Header: `Shield` link to `/admin`, rendered only for `role==='admin'`
+- `src/lib/csv.ts` (hand-rolled, zero deps), `src/lib/admin.ts`
+
+**GATE 1 decisions (approved):**
+- Layout: **separate routes under the `(app)` shell** (`/admin` + `/admin/users`) with in-page sub-nav
+- CSV: **hand-rolled** RFC-4180 (BOM for Excel, quote/escape) — **no `papaparse`** (not installed; "don't add a dep just in case")
+- CSV JSONB: **flattened, section-prefixed columns** (`priority_…`, `contact_…`, …); multi-selects joined with `; `
+- RepId-edit safety: **(a) disallow** repId change when the user has ≥1 submission (409); reassignment stays the explicit delete-flow path
+- **Driver constraint:** `drizzle-orm/neon-http` has **no interactive `db.transaction()`** → atomicity via **`db.batch([...])`** (single Neon server-side transaction)
+
+**GATE 2 decision (approved):** `DELETE` validates everything *before* any write (403 non-admin, 404 missing, 403 self, 400 missing/both/bad-`reassignTo`); then a 2-statement `db.batch` — reassign branch `[UPDATE submissions SET rep_id/rep_name, DELETE user]`, delete-all branch `[DELETE submissions, DELETE user]`; 0-subs = simple delete. No row locking (single admin actor, batch atomic).
+
+**Self-protections:** admin can't change own role (403) or delete self (403, UI-disabled).
+
+**Notes**
+- **Zero new dependencies, zero new env vars, zero schema migrations** (no `drizzle-kit generate`; reuses `SEED_PASSWORD`, `users`/`submissions` tables)
+- Cycle 6 close-out follow-up: CLAUDE.md "6-person sales team" intro **left unedited** (no explicit approval given; CHANGELOG remains the record) — Checkpoint 1 documented no-op
+- Verified (local curl matrix): non-admin 403 (middleware + per-route), submissions all/filtered, CSV (BOM/escaping/no hashes), users DTO has no `passwordHash`, add+dup(409), PATCH name/role, self-role-change 403, repId-with-submissions 409, reset→bootstrap, DELETE 0-subs/self/reassign/delete-all/bad-reassign/missing-choice all correct & atomic (no partial state)
+- **Final DB state restored to seed:** 7 users, only `mark.mireles` (`MMireles`) `password_set=true`, other 6 bootstrap; submissions `BHrdlichka=1`; all test users/submissions/reassignments reverted. Mark's real password never touched
+- JWT type-augmentation casts untouched (Cycle 6 known-flaky decision)
+- Cycle 8 awareness: admin submissions data + CSV flattening shape is a natural input for the Claude AI pipeline summary
+- Polish deferrals (Cycle 9): admin uses `window.confirm` for simple confirms; tables are card-style on mobile; no toast system yet
+
 ## Cycle 6.5 — User self-service profile edit (2026-05-17)
 
 Logged-in users can edit their own name, email, and password at a new `/account` page. No admin user management (that's Cycle 7).

@@ -50,7 +50,17 @@ There is no rep selector — authentication is by email + password.
 **Profile (Cycle 6.5):** any signed-in user can manage their own
 name, email, and password at **`/account`** (linked from the header
 user pill). Email/password changes take effect at next login; name and
-email update in the header immediately. Admin user management is Cycle 7.
+email update in the header immediately.
+
+**Admin dashboard (Cycle 7):** admins get `/admin` (Shield icon in the
+header, admin-only). Submissions tab: all reps' visits with a rep filter,
+expandable detail, and a one-click CSV export (UTF-8, JSONB flattened to
+columns). Users tab: add/edit users, reset a user's password (forces a
+change on their next login), and delete users — deleting a user with
+submissions requires reassigning them to another user or explicitly
+deleting them (atomic). Admins can't change their own role or delete
+themselves. Gated by middleware **and** a server-side check on every
+admin route/page.
 
 ### Tech stack
 
