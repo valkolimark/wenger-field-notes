@@ -1,7 +1,13 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
-import { ChevronDown, Download } from "lucide-react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  ChevronDown,
+  Download,
+  Sparkles,
+  RotateCw,
+  X,
+} from "lucide-react";
 import type { Submission } from "@/lib/submissions";
 import type { AdminUserDTO } from "@/lib/admin";
 import { AdminNav } from "./admin-nav";
@@ -34,6 +40,79 @@ export function AdminSubmissions() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [openId, setOpenId] = useState<string | null>(null);
+
+  const [sumOpen, setSumOpen] = useState(false);
+  const [sumText, setSumText] = useState("");
+  const [sumStreaming, setSumStreaming] = useState(false);
+  const [sumError, setSumError] = useState<string | null>(null);
+  const [sumTitle, setSumTitle] = useState("");
+  const abortRef = useRef<AbortController | null>(null);
+  const lastScopeRef = useRef<"pipeline" | "rep">("pipeline");
+
+  const runSummary = useCallback(
+    async (scope: "pipeline" | "rep") => {
+      if (scope === "rep" && !repFilter) return;
+      abortRef.current?.abort();
+      const ac = new AbortController();
+      abortRef.current = ac;
+      lastScopeRef.current = scope;
+      setSumOpen(true);
+      setSumError(null);
+      setSumText("");
+      setSumStreaming(true);
+      setSumTitle(
+        scope === "rep"
+          ? `Summary — ${
+              users.find((u) => u.repId === repFilter)?.name || repFilter
+            }`
+          : "Pipeline summary",
+      );
+      try {
+        const res = await fetch("/api/summarize", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            scope,
+            repId: scope === "rep" ? repFilter : undefined,
+          }),
+          signal: ac.signal,
+        });
+        if (!res.ok || !res.body) {
+          const d = (await res.json().catch(() => ({}))) as {
+            error?: string;
+          };
+          setSumStreaming(false);
+          setSumError(
+            d.error || "Couldn't generate the summary — try again.",
+          );
+          return;
+        }
+        const reader = res.body.getReader();
+        const dec = new TextDecoder();
+        for (;;) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          setSumText((p) => p + dec.decode(value, { stream: true }));
+        }
+        setSumStreaming(false);
+      } catch (e) {
+        if ((e as { name?: string })?.name === "AbortError") return;
+        setSumStreaming(false);
+        setSumError("Connection lost — regenerate.");
+      }
+    },
+    [repFilter, users],
+  );
+
+  function closeSummary() {
+    abortRef.current?.abort();
+    setSumOpen(false);
+    setSumStreaming(false);
+    setSumText("");
+    setSumError(null);
+  }
+
+  useEffect(() => () => abortRef.current?.abort(), []);
 
   useEffect(() => {
     fetch("/api/admin/users")
@@ -121,7 +200,65 @@ export function AdminSubmissions() {
           <Download size={16} aria-hidden />
           Export CSV
         </a>
+        <button
+          type="button"
+          onClick={() => runSummary("pipeline")}
+          disabled={sumStreaming}
+          className="inline-flex h-11 items-center gap-2 rounded-xl border border-brand-navy/20 bg-white px-4 text-sm font-semibold text-brand-navy transition-colors hover:border-brand-navy/40 disabled:opacity-50"
+        >
+          <Sparkles size={16} aria-hidden />
+          Summarize pipeline
+        </button>
+        <button
+          type="button"
+          onClick={() => runSummary("rep")}
+          disabled={sumStreaming || !repFilter}
+          title={!repFilter ? "Select a rep first" : undefined}
+          className="inline-flex h-11 items-center gap-2 rounded-xl border border-brand-navy/20 bg-white px-4 text-sm font-semibold text-brand-navy transition-colors hover:border-brand-navy/40 disabled:opacity-50"
+        >
+          <Sparkles size={16} aria-hidden />
+          Per-rep summary
+        </button>
       </div>
+
+      {sumOpen && (
+        <div className="mb-5 rounded-2xl border border-brand-navy/15 bg-white p-4">
+          <div className="flex items-center justify-between gap-3">
+            <h2 className="font-display text-lg text-brand-navy">
+              {sumTitle}
+            </h2>
+            <div className="flex items-center gap-1">
+              <button
+                type="button"
+                onClick={() => runSummary(lastScopeRef.current)}
+                disabled={sumStreaming}
+                aria-label="Regenerate"
+                className="grid h-9 w-9 place-items-center rounded-lg text-brand-navy/60 hover:bg-black/5 hover:text-brand-navy disabled:opacity-40"
+              >
+                <RotateCw size={16} aria-hidden />
+              </button>
+              <button
+                type="button"
+                onClick={closeSummary}
+                aria-label="Close"
+                className="grid h-9 w-9 place-items-center rounded-lg text-brand-navy/60 hover:bg-black/5 hover:text-brand-navy"
+              >
+                <X size={16} aria-hidden />
+              </button>
+            </div>
+          </div>
+          {sumError ? (
+            <p className="mt-3 text-sm text-red-600">{sumError}</p>
+          ) : (
+            <p className="mt-3 whitespace-pre-wrap break-words text-sm leading-relaxed text-brand-navy/85">
+              {sumText}
+              {sumStreaming && (
+                <span className="ml-0.5 animate-pulse">▍</span>
+              )}
+            </p>
+          )}
+        </div>
+      )}
 
       {loading ? (
         <p className="text-sm text-brand-navy/45">Loading…</p>
