@@ -31,6 +31,19 @@ export default auth((req) => {
     return Response.redirect(new URL("/map", nextUrl));
   }
 
+  // Cycle 7: admin-only areas. Defense in depth — every /api/admin route
+  // also re-checks role server-side; this is the first line.
+  const isAdminArea =
+    path === "/admin" ||
+    path.startsWith("/admin/") ||
+    path.startsWith("/api/admin");
+  if (isAdminArea && req.auth?.user?.role !== "admin") {
+    if (path.startsWith("/api/")) {
+      return Response.json({ error: "Forbidden" }, { status: 403 });
+    }
+    return Response.redirect(new URL("/map", nextUrl));
+  }
+
   return;
 });
 
