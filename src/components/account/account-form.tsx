@@ -4,6 +4,8 @@ import { useState } from "react";
 import { useSession } from "next-auth/react";
 import { Check } from "lucide-react";
 import { TextField } from "@/components/form/fields";
+import { Button } from "@/components/ui/button";
+import { useToast } from "@/components/ui/toast";
 
 type Status =
   | { state: "idle" }
@@ -64,13 +66,9 @@ function SaveButton({
   children: React.ReactNode;
 }) {
   return (
-    <button
-      type="submit"
-      disabled={status.state === "saving"}
-      className="flex h-11 items-center justify-center rounded-xl bg-brand-navy px-5 text-sm font-semibold text-white transition-colors duration-200 hover:bg-brand-navy-light focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-navy disabled:opacity-60"
-    >
+    <Button type="submit" variant="primary" disabled={status.state === "saving"}>
       {status.state === "saving" ? "Saving…" : children}
-    </button>
+    </Button>
   );
 }
 
@@ -97,6 +95,7 @@ export function AccountForm({
   initialEmail: string;
 }) {
   const { update } = useSession();
+  const { success } = useToast();
 
   const [name, setName] = useState(initialName);
   const [nameStatus, setNameStatus] = useState<Status>({ state: "idle" });
@@ -111,6 +110,7 @@ export function AccountForm({
 
   function flashSaved(set: (s: Status) => void) {
     set({ state: "saved" });
+    success("Saved");
     setTimeout(() => set({ state: "idle" }), 2000);
   }
 
