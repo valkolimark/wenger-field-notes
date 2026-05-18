@@ -1,16 +1,20 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import Link from "next/link";
 import {
   ChevronDown,
   Download,
   Sparkles,
   RotateCw,
   X,
+  Pencil,
+  Trash2,
 } from "lucide-react";
 import type { Submission } from "@/lib/submissions";
 import type { AdminUserDTO } from "@/lib/admin";
 import { Button, buttonClass } from "@/components/ui/button";
+import { useToast } from "@/components/ui/toast";
 import { RowsSkeleton } from "@/components/ui/skeleton";
 import { AdminNav } from "./admin-nav";
 
@@ -42,6 +46,8 @@ export function AdminSubmissions() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [openId, setOpenId] = useState<string | null>(null);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+  const { success, error: toastError, confirm } = useToast();
 
   const [sumOpen, setSumOpen] = useState(false);
   const [sumText, setSumText] = useState("");
@@ -146,6 +152,32 @@ export function AdminSubmissions() {
   useEffect(() => {
     void load();
   }, [load]);
+
+  // Admin deletes any submission (server re-checks role on DELETE
+  // /api/submissions/[id] — the single owner-or-admin route).
+  async function handleDelete(sid: string) {
+    const ok = await confirm({
+      title: "Delete this submission?",
+      body: "This permanently removes the visit for this rep. This can't be undone.",
+      confirmLabel: "Delete",
+      destructive: true,
+    });
+    if (!ok || deletingId) return;
+    setDeletingId(sid);
+    try {
+      const res = await fetch(`/api/submissions/${sid}`, {
+        method: "DELETE",
+      });
+      if (!res.ok) throw new Error();
+      success("Submission deleted");
+      if (openId === sid) setOpenId(null);
+      await load();
+    } catch {
+      toastError("Couldn't delete this submission — try again.");
+    } finally {
+      setDeletingId(null);
+    }
+  }
 
   const stats = useMemo(() => {
     const weekAgo = Date.now() - 7 * 24 * 60 * 60 * 1000;
@@ -369,6 +401,23 @@ export function AdminSubmissions() {
                         </p>
                       </div>
                     )}
+                    <div className="mt-4 flex gap-2 border-t border-black/5 pt-3">
+                      <Link
+                        href={`/submissions/${s.id}/edit`}
+                        className={buttonClass("secondary")}
+                      >
+                        <Pencil size={16} aria-hidden />
+                        Edit
+                      </Link>
+                      <Button
+                        variant="destructive"
+                        onClick={() => handleDelete(s.id)}
+                        disabled={deletingId === s.id}
+                      >
+                        <Trash2 size={16} aria-hidden />
+                        {deletingId === s.id ? "Deleting…" : "Delete"}
+                      </Button>
+                    </div>
                   </div>
                 )}
               </li>
