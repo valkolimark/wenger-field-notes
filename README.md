@@ -134,9 +134,19 @@ See `CLAUDE.md` for the full project rules. Highlights:
 
 ---
 
-## For users (added in later cycles)
+## For users
 
-_To be written in Cycle 9 — Launch._
+**Live app:** https://valkolimark-wenger-field-notes.vercel.app
+(custom domain deferred — runs on the `vercel.app` URL for now).
+
+- **Team onboarding:** [`docs/LAUNCH.md`](docs/LAUNCH.md) — how reps
+  log in (temp password, force-change), the four screens, troubleshooting.
+- **Admin runbook:** [`docs/ADMIN.md`](docs/ADMIN.md) — reset/add/remove
+  users, reassignment, AI summaries, `SEED_PASSWORD`, infra access.
+
+Cycle 9 (Polish & launch) shipped: system sans-serif throughout,
+accessible button hierarchy, toast/confirm system, loading skeletons,
+empty states, and error boundaries on every screen.
 
 ---
 

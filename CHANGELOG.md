@@ -6,6 +6,35 @@ Format: `## Cycle N — Title (YYYY-MM-DD)` followed by a short prose summary, t
 
 ---
 
+## Cycle 9 — Polish & launch (2026-05-18)
+
+Final polish and launch handoff. The team starts using the app on the existing `vercel.app` URL (custom domain deferred per request).
+
+**CLAUDE.md edits (Checkpoint 1):**
+- Typography rule → "system sans stack everywhere, no serif fonts anywhere"
+- Intro → "California sales team (5 reps + 2 admins)" (was "6-person")
+- Cycle 9 scope line → "team onboarding (handoff to admin Mark; no email sending)"
+
+**GATE 1 decisions:**
+- **Button palette** → shared `<Button>` + `buttonClass()` (`components/ui/button.tsx`): primary `#0A3758` white (AAA 11.7:1), destructive **`#B42318`** white (AA 5.9:1 — a deliberately distinct red, never the warm priority accent `#b8612a`), secondary outline, ghost; `active:scale-[.98]` + 200ms ease-out
+- **Toast/confirm** → hand-rolled (`components/ui/toast.tsx`, **no dep**): `useToast()` success/error toasts + promise `confirm()` modal replacing `window.confirm`
+- **Skeletons** → shared `<Skeleton>`/`RowsSkeleton`/`FormSkeleton` (`components/ui/skeleton.tsx`) used in route `loading.tsx` + client fetch states
+- **Error boundaries** → shared `<ErrorState>`; `global-error.tsx`, app-shell `(app)/error.tsx`, and per-route `error.tsx` for form/submissions/map/account/admin/admin-users
+- **Custom domain → deferred** (user said bypass the subdomain for now); stays on `valkolimark-wenger-field-notes.vercel.app`
+
+**Shipped**
+- **Sans-serif sweep:** removed `--font-display` token + every `font-display` class across 12 files — `grep -ri "georgia\|font-display\|font-serif" src/` is empty (no Tailwind config file; v4 `@theme`)
+- Loading `loading.tsx` for `/submissions /admin /admin/users /account /form/[schoolId] /map`; helpful empty/filter-empty states; error boundaries everywhere
+- **Per-screen polish:** `/form` (toast-confirm on discard, `<Button>`, save toast, autosave note) · `/submissions` (skeleton, empty copy, button) · `/map` (Start-visit button, error boundary) · `/account` (save toasts, `<Button>`) · `/admin`+`/admin/users` (**all `window.confirm` → toast confirm**, success toasts, `<Button>`, skeletons, `animate-pop` modal) · header is now a dropdown menu (name+role, Account, Admin, Log out) · login/set-password tactile polish
+- Smooth transitions: modal `animate-pop`, summary panel `fade-in-soft`, buttons `active:scale`+ease-out; existing route/collapsible fades kept
+- `docs/LAUNCH.md` (team onboarding) + `docs/ADMIN.md` (admin runbook)
+
+**Notes**
+- **Zero new dependencies, zero new env vars, zero schema migrations**
+- `grep -r "window.confirm\|alert(" src/` → **0**
+- Custom domain + `vercel.app`-URL polish are the only deferred items (post-launch)
+- JWT type casts untouched; Mark's real password untouched; DB to be restored to exact seed at close
+
 ## Cycle 8 — Claude AI summaries (2026-05-17)
 
 Admins can stream a Claude-generated pipeline summary (whole team or one rep) from `/admin`.
