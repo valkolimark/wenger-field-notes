@@ -6,7 +6,7 @@
 
 ## Project overview
 
-**Wenger Field Notes** is a mobile-first sales field app for Wenger Corporation's 6-person sales team covering California private schools. Reps log school visits on their phones; an admin dashboard aggregates submissions; Claude AI generates pipeline summaries from the raw data.
+**Wenger Field Notes** is a mobile-first sales field app for Wenger Corporation's California sales team (5 reps + 2 admins) covering California private schools. Reps log school visits on their phones; an admin dashboard aggregates submissions; Claude AI generates pipeline summaries from the raw data.
 
 **Tech stack (do not deviate without approval):**
 
@@ -28,7 +28,7 @@
 - **Logo files:** `/public/logo-white.png` (for dark backgrounds) and `/public/logo-blue.png` (for light backgrounds). Both have transparent backgrounds.
 - **Login screen:** Full-bleed gradient background from `#082a45` (top, darker) to `#1a5685` (bottom, lighter). White Wenger logo centered. Smooth, premium feel.
 - **Inner app header:** Wenger navy `#0A3758` solid background bar, white Wenger logo left-aligned, user controls right-aligned.
-- **Typography:** System font stack (`ui-sans-serif, system-ui, -apple-system`); Georgia serif only for display headings (page titles, login screen)
+- **Typography:** System font stack (`ui-sans-serif, system-ui, -apple-system`) everywhere, including display headings. No serif fonts anywhere in the app.
 - **Tone:** Refined, professional, calm. Not playful. Not corporate-stiff either. Think "premium tool a craftsperson uses daily."
 
 ---
@@ -153,7 +153,7 @@ Cycles are numbered. Each has an objective, a scope, and a done-criteria. Cycles
 
 ### Cycle 9 — Polish & launch
 **Objective:** Final QA, copy review, custom domain, team onboarding.
-**Scope:** Loading skeletons, error boundaries, empty states, custom domain setup, send launch email to 6 reps.
+**Scope:** Loading skeletons, error boundaries, empty states, custom domain setup, team onboarding (handoff to admin Mark for distribution; no email sending — app has no email infrastructure).
 **Done when:** Team is using it. Real data is flowing.
 
 ### Cycles 10+ — Iteration based on real-world feedback
