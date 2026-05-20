@@ -14,9 +14,6 @@ import {
   type Submission,
   createEmptyForm,
   newSubmissionId,
-  loadDraft,
-  saveDraft,
-  clearDraft,
   formatRelative,
   formatVisitDate,
   VISIT_PRIORITY_OPTIONS,
@@ -31,6 +28,7 @@ import {
   HEARD_ABOUT_OPTIONS,
   MATERIALS_LEFT_OPTIONS,
 } from "@/lib/submissions";
+import { loadDraft, saveDraft, clearDraft } from "@/lib/db/local";
 
 type Action =
   | { type: "priority"; patch: Partial<VisitFormData["priority"]> }
@@ -120,28 +118,37 @@ export function VisitForm({
   const restoredRef = useRef(false);
 
   // Restore an existing draft once (per rep + school) — new-visit only.
+  // Cycle 12: drafts now live in IndexedDB (Dexie); loader is async.
   useEffect(() => {
     if (isEdit || restoredRef.current || !repId) return;
     restoredRef.current = true;
-    const draft = loadDraft(repId, school.id);
-    if (draft) {
+    let cancelled = false;
+    void (async () => {
+      const draft = await loadDraft(repId, school.id);
+      if (cancelled || !draft) return;
       dispatch({ type: "load", data: draft.data });
       baselineRef.current = JSON.stringify(draft.data);
       setDraftAt(draft.updatedAt);
-    }
+    })();
+    return () => {
+      cancelled = true;
+    };
   }, [isEdit, repId, school.id]);
 
   const isDirty = JSON.stringify(form) !== baselineRef.current;
 
-  // Debounced draft autosave — new-visit only; never in edit mode.
+  // Debounced draft autosave (500ms per Cycle 12) — new-visit only;
+  // never in edit mode. Fire-and-forget; Dexie put is async.
   useEffect(() => {
     if (isEdit || !repId || !isDirty || saved) return;
-    const t = setTimeout(() => saveDraft(repId, school.id, form), 400);
+    const t = setTimeout(() => {
+      void saveDraft(repId, school.id, form);
+    }, 500);
     return () => clearTimeout(t);
   }, [isEdit, form, repId, school.id, isDirty, saved]);
 
   function discardDraft() {
-    clearDraft(repId, school.id);
+    void clearDraft(repId, school.id);
     const empty = createEmptyForm();
     dispatch({ type: "load", data: empty });
     baselineRef.current = JSON.stringify(empty);
@@ -240,7 +247,7 @@ export function VisitForm({
     }
 
     // Only now is it safe to drop the local draft.
-    clearDraft(repId, school.id);
+    void clearDraft(repId, school.id);
     setSaved(true);
     success("Visit saved");
     setTimeout(

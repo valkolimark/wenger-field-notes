@@ -1,9 +1,12 @@
-// Cycle 4: local-only submissions + drafts (localStorage). Cycle 5 moves
-// this to Neon/Drizzle. All reads/writes are SSR-guarded.
+// Cycle 4: local-only submissions + drafts (localStorage).
+// Cycle 5 moved submissions to Neon/Drizzle.
+// Cycle 12 moved drafts (and a new pending_submissions queue) to
+//   IndexedDB via Dexie (`src/lib/db/local.ts`) — the draft helpers
+//   that used to live here are gone.
+// What stays here: the canonical types, option sets, id minter, and
+// date formatters used by every UI surface.
 
 export const SUBMISSIONS_KEY = "wenger.submissions.v1";
-export const draftKey = (repId: string, schoolId: string) =>
-  `wenger.draft.${repId}.${schoolId}`;
 
 // --- Option sets (shared by the form, list badge, and detail view) ---
 
@@ -146,11 +149,6 @@ export interface Submission extends VisitFormData {
   visitDate: string; // ISO, set on save
 }
 
-export interface Draft {
-  data: VisitFormData;
-  updatedAt: string; // ISO
-}
-
 export function createEmptyForm(): VisitFormData {
   return {
     priority: {
@@ -221,43 +219,6 @@ export function clearLegacySubmissions(): void {
   if (typeof window === "undefined") return;
   try {
     window.localStorage.removeItem(SUBMISSIONS_KEY);
-  } catch {
-    // ignore
-  }
-}
-
-export function loadDraft(repId: string, schoolId: string): Draft | null {
-  if (typeof window === "undefined") return null;
-  try {
-    const raw = window.localStorage.getItem(draftKey(repId, schoolId));
-    if (!raw) return null;
-    return JSON.parse(raw) as Draft;
-  } catch {
-    return null;
-  }
-}
-
-export function saveDraft(
-  repId: string,
-  schoolId: string,
-  data: VisitFormData,
-): void {
-  if (typeof window === "undefined") return;
-  try {
-    const draft: Draft = { data, updatedAt: new Date().toISOString() };
-    window.localStorage.setItem(
-      draftKey(repId, schoolId),
-      JSON.stringify(draft),
-    );
-  } catch {
-    // ignore
-  }
-}
-
-export function clearDraft(repId: string, schoolId: string): void {
-  if (typeof window === "undefined") return;
-  try {
-    window.localStorage.removeItem(draftKey(repId, schoolId));
   } catch {
     // ignore
   }
