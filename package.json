@@ -13,6 +13,7 @@
     "@anthropic-ai/sdk": "0.96.0",
     "@neondatabase/serverless": "^1.1.0",
     "@serwist/next": "9.5.11",
+    "@vercel/blob": "2.4.0",
     "bcryptjs": "^3.0.3",
     "dexie": "4.4.2",
     "dexie-react-hooks": "4.4.0",

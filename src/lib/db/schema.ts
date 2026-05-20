@@ -5,6 +5,7 @@ import {
   jsonb,
   index,
   uuid,
+  integer,
 } from "drizzle-orm/pg-core";
 import type { VisitFormData } from "@/lib/submissions";
 
@@ -72,3 +73,46 @@ export const users = pgTable("users", {
 
 export type UserRow = typeof users.$inferSelect;
 export type InsertUser = typeof users.$inferInsert;
+
+// Cycle 13: photo attachments for a submission. submission_id matches
+// submissions.id (text), no FK — same string-key convention as
+// submissions.rep_id (Cycle 6 chose not to FK that either). Lack of FK
+// also avoids constraint failures if the offline sync engine ever races
+// (photos can theoretically upload before their parent row exists,
+// though the two-phase sync ordering guard prevents this in practice).
+//
+// Soft-delete: deleted_at flips on DELETE; the blob bytes are not
+// reaped this cycle (orphans live in Vercel Blob until a future cleanup
+// pass). Reads MUST filter `WHERE deleted_at IS NULL`.
+export const photos = pgTable(
+  "photos",
+  {
+    id: text("id").primaryKey(), // client-generated crypto.randomUUID()
+    submissionId: text("submission_id").notNull(),
+    repId: text("rep_id").notNull(),
+    schoolId: text("school_id").notNull(),
+    blobUrl: text("blob_url").notNull(),
+    blobPathname: text("blob_pathname").notNull(),
+    caption: text("caption").default("").notNull(),
+    mimeType: text("mime_type").notNull(),
+    fileSize: integer("file_size").notNull(), // bytes, post-compression
+    width: integer("width"),
+    height: integer("height"),
+    takenAt: timestamp("taken_at", { withTimezone: true }).notNull(),
+    uploadedAt: timestamp("uploaded_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+    deletedAt: timestamp("deleted_at", { withTimezone: true }),
+  },
+  (t) => [
+    index("photos_submission_id_idx").on(t.submissionId),
+    index("photos_rep_id_idx").on(t.repId),
+    index("photos_school_id_idx").on(t.schoolId),
+  ],
+);
+
+export type PhotoRow = typeof photos.$inferSelect;
+export type InsertPhoto = typeof photos.$inferInsert;
