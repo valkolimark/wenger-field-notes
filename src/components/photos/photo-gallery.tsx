@@ -47,12 +47,16 @@ export function PhotoGallery({
   isPending = false,
   canDelete = false,
   onDeleted,
+  onLoaded,
 }: {
   submissionId: string;
   /** Cycle 12 pending row → no server photos to fetch. */
   isPending?: boolean;
   canDelete?: boolean;
   onDeleted?: () => void;
+  /** Bubbles the count of server-side photos once GET completes.
+   *  Used by /admin to gate the "Deep analysis" button. */
+  onLoaded?: (serverPhotoCount: number) => void;
 }) {
   const [serverPhotos, setServerPhotos] = useState<ServerPhotoDTO[]>([]);
   const [serverState, setServerState] = useState<
@@ -77,6 +81,7 @@ export function PhotoGallery({
     if (isPending) {
       setServerPhotos([]);
       setServerState("ok");
+      onLoaded?.(0);
       return;
     }
     setServerState("loading");
@@ -89,10 +94,11 @@ export function PhotoGallery({
       const data = (await res.json()) as ServerPhotoDTO[];
       setServerPhotos(data);
       setServerState("ok");
+      onLoaded?.(data.length);
     } catch {
       setServerState("error");
     }
-  }, [submissionId, isPending]);
+  }, [submissionId, isPending, onLoaded]);
 
   useEffect(() => {
     void loadServer();

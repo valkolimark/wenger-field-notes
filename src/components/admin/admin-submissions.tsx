@@ -10,6 +10,7 @@ import {
   X,
   Pencil,
   Trash2,
+  Eye,
 } from "lucide-react";
 import type { Submission } from "@/lib/submissions";
 import type { AdminUserDTO } from "@/lib/admin";
@@ -56,33 +57,46 @@ export function AdminSubmissions() {
   const [sumError, setSumError] = useState<string | null>(null);
   const [sumTitle, setSumTitle] = useState("");
   const abortRef = useRef<AbortController | null>(null);
-  const lastScopeRef = useRef<"pipeline" | "rep">("pipeline");
+  type SummaryArgs =
+    | { scope: "pipeline" }
+    | { scope: "rep" }
+    | { scope: "visit"; submissionId: string; schoolName: string };
+  const lastArgsRef = useRef<SummaryArgs>({ scope: "pipeline" });
+  // Cycle 13: photo count per opened row, bubbled from <PhotoGallery>.
+  // Gates the "Deep analysis" button visibility per spec.
+  const [photoCountByRow, setPhotoCountByRow] = useState<
+    Record<string, number>
+  >({});
 
   const runSummary = useCallback(
-    async (scope: "pipeline" | "rep") => {
-      if (scope === "rep" && !repFilter) return;
+    async (args: SummaryArgs) => {
+      if (args.scope === "rep" && !repFilter) return;
       abortRef.current?.abort();
       const ac = new AbortController();
       abortRef.current = ac;
-      lastScopeRef.current = scope;
+      lastArgsRef.current = args;
       setSumOpen(true);
       setSumError(null);
       setSumText("");
       setSumStreaming(true);
       setSumTitle(
-        scope === "rep"
+        args.scope === "rep"
           ? `Summary — ${
               users.find((u) => u.repId === repFilter)?.name || repFilter
             }`
-          : "Pipeline summary",
+          : args.scope === "visit"
+            ? `Deep analysis — ${args.schoolName}`
+            : "Pipeline summary",
       );
       try {
         const res = await fetch("/api/summarize", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            scope,
-            repId: scope === "rep" ? repFilter : undefined,
+            scope: args.scope,
+            repId: args.scope === "rep" ? repFilter : undefined,
+            submissionId:
+              args.scope === "visit" ? args.submissionId : undefined,
           }),
           signal: ac.signal,
         });
@@ -234,7 +248,7 @@ export function AdminSubmissions() {
         </a>
         <Button
           variant="secondary"
-          onClick={() => runSummary("pipeline")}
+          onClick={() => runSummary({ scope: "pipeline" })}
           disabled={sumStreaming}
         >
           <Sparkles size={16} aria-hidden />
@@ -242,7 +256,7 @@ export function AdminSubmissions() {
         </Button>
         <Button
           variant="secondary"
-          onClick={() => runSummary("rep")}
+          onClick={() => runSummary({ scope: "rep" })}
           disabled={sumStreaming || !repFilter}
           title={!repFilter ? "Select a rep first" : undefined}
         >
@@ -260,7 +274,7 @@ export function AdminSubmissions() {
             <div className="flex items-center gap-1">
               <Button
                 variant="ghost"
-                onClick={() => runSummary(lastScopeRef.current)}
+                onClick={() => runSummary(lastArgsRef.current)}
                 disabled={sumStreaming}
                 aria-label="Regenerate"
                 className="h-9 w-9 px-0"
@@ -407,10 +421,20 @@ export function AdminSubmissions() {
                         Photos
                       </dt>
                       <div className="mt-2">
-                        <PhotoGallery submissionId={s.id} canDelete />
+                        <PhotoGallery
+                          submissionId={s.id}
+                          canDelete
+                          onLoaded={(count) =>
+                            setPhotoCountByRow((prev) =>
+                              prev[s.id] === count
+                                ? prev
+                                : { ...prev, [s.id]: count },
+                            )
+                          }
+                        />
                       </div>
                     </div>
-                    <div className="mt-4 flex gap-2 border-t border-black/5 pt-3">
+                    <div className="mt-4 flex flex-wrap gap-2 border-t border-black/5 pt-3">
                       <Link
                         href={`/submissions/${s.id}/edit`}
                         className={buttonClass("secondary")}
@@ -418,6 +442,22 @@ export function AdminSubmissions() {
                         <Pencil size={16} aria-hidden />
                         Edit
                       </Link>
+                      {(photoCountByRow[s.id] ?? 0) > 0 && (
+                        <Button
+                          variant="secondary"
+                          onClick={() =>
+                            runSummary({
+                              scope: "visit",
+                              submissionId: s.id,
+                              schoolName: s.schoolName,
+                            })
+                          }
+                          disabled={sumStreaming}
+                        >
+                          <Eye size={16} aria-hidden />
+                          Deep analysis
+                        </Button>
+                      )}
                       <Button
                         variant="destructive"
                         onClick={() => handleDelete(s.id)}
