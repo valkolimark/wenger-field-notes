@@ -6,6 +6,131 @@ Format: `## Cycle N — Title (YYYY-MM-DD)` followed by a short prose summary, t
 
 ---
 
+## Cycle 12 — Offline-first foundation (2026-05-19)
+
+The submission flow is now **local-first**: reps work through dead zones
+without losing data — drafts survive, finished visits queue locally,
+pending visits stay editable/deletable until they sync, and the queue
+drains automatically when connectivity returns. Builds on Cycle 11's
+manifest/standalone work; no manifest changes.
+
+Shipped as **one cycle, eight checkpoints** (deliberate override of the
+"one slice per cycle" rule, user-approved at the proceed gate) so the
+move is atomic for the team.
+
+**Decisions:**
+- **`@serwist/next` over hand-rolled SW** — Next 16 + serwist v9 compat
+  verified at install (`peerDependencies.next: ">=14"`). Production
+  build switched to **`next build --webpack`** because serwist v9 is
+  webpack-based and Next 16's Turbopack production build conflicted.
+- **`/api/health` is public** — middleware short-circuits it parallel
+  to `/api/auth/*`. The sync engine uses a real `HEAD /api/health` (not
+  `navigator.onLine`, which lies on iOS); a redirected probe would have
+  falsely read "online."
+- **No legacy localStorage draft migration** — drafts are
+  device-local/ephemeral; the new Dexie store starts fresh; orphan
+  `wenger.draft.*` keys decay naturally.
+- **CA bbox tile cache** lat 32.5–42 × lon −124.5 to −114, zooms 8–14,
+  `maxEntries: 800`, `maxAgeSeconds: 30d`, **StaleWhileRevalidate**.
+- **Race policy** (pending row syncs mid-edit): save handler detects
+  `{ok:false, reason:"not-pending"}` from `updatePendingContent` →
+  `router.replace(.../edit?just-synced=1)` → `EditSubmission` bypasses
+  Dexie + pops a one-shot notice → page loads in non-pending mode.
+
+**Added**
+- `src/lib/db/local.ts` — Dexie database `wenger-fieldnotes` v1 with
+  two stores: `drafts` (composite key `${repId}__${schoolId}`,
+  secondary indexes on `repId`/`schoolId`/`updatedAt`) and `pending`
+  (primary `id`, secondary on `repId`/`status`/`createdAtLocal`).
+  `PendingStatus = "pending"|"syncing"|"synced"|"failed"`,
+  `PENDING_SCHEMA_VERSION = 1`. Typed helpers: `loadDraft`/`saveDraft`/
+  `clearDraft`, `enqueuePending`, `getPending`/`getAllPending`/
+  `getPendingByRep`, `updatePendingContent` (rejects "not-pending"
+  rows — the race hook), `setPendingStatus`, `deletePending`.
+- `src/lib/sync.ts` — client sync engine. `drainOnce()` probes
+  `/api/health` → iterates pending+failed rows → flips each to
+  `syncing` → POSTs `/api/submissions` → on success `deletePending`,
+  on failure resets to `pending` with `lastError`/`retryCount++`. One
+  drain in flight at a time. Strips Dexie-only fields before POST.
+  `useSyncEngine()` mounts once (in `AppShell`): initial drain +
+  `window 'online'` listener + 60s interval. `useSyncStatus()` exposes
+  reactive `{pendingCount, syncing, hasFailed}` via `useLiveQuery`.
+- `src/app/sw.ts` (Serwist worker): precaches `self.__SW_MANIFEST`
+  (app shell, `_next/static`, …); runtime route for OSM tiles inside
+  the CA bbox at z8–14 (`StaleWhileRevalidate` cache
+  `osm-tiles-ca-v1`); `@serwist/next` `defaultCache` after it.
+- `src/app/api/health/route.ts` — GET+HEAD return `{ok:true, ts}` with
+  `cache-control: no-store`. Public.
+- `src/components/sync/sync-status-strip.tsx` — `/submissions`-only
+  status strip: "✓ All synced" calm gray when clean; "⏳ N pending
+  sync" warm `#b8612a` + **Sync now** (spinning while syncing/manual,
+  disabled while busy) otherwise.
+- `src/components/sw/register-sw.tsx` — mounts the production-only SW
+  registration on the root layout (idempotent; dev disabled).
+- **New committed assets:** none (source icons unchanged). **New deps
+  (pinned exact, flagged):** `@serwist/next@9.5.11`, `serwist@9.5.11`,
+  `dexie@4.4.2`, `dexie-react-hooks@4.4.0`.
+
+**Changed**
+- Visit form: new-visit `save` is now **local-first** —
+  `enqueuePending(submission)` → clear draft → toast → navigate.
+  `drainOnce()` kicked from the form so an online rep sees the row
+  flip to synced within seconds (not the next 60s tick). Edit branch
+  takes new `isPendingEdit` prop: pending → `updatePendingContent`,
+  synced → existing PATCH. Mid-sync race shows toast + redirects.
+  Draft autosave debounce 400 → 500ms; drafts moved from localStorage
+  to Dexie (async `loadDraft`/`saveDraft`/`clearDraft`).
+- `useSubmissions` returns `ListSubmission[]` (server + reactive Dexie
+  pending, deduped server-wins). Exposes `pendingCount`.
+- `SubmissionsList`: per-row "Pending sync" warm badge; delete
+  branches on `isPending` → `deletePending` locally (never reaches
+  the server) vs Cycle 10 API DELETE.
+- `SubmissionDetail`: loads Dexie pending first; "Pending sync" badge
+  in header; delete branches the same way.
+- `EditSubmission`: loads Dexie first (skipped when `?just-synced=1`);
+  passes `isPendingEdit` to `VisitForm`; pops the race notice.
+- `AppShell`: mounts `useSyncEngine()` once per shell mount.
+- `TabBar`: small warm numeric badge on **My Submissions** when
+  `pendingCount > 0` — visible from anywhere. Header still untouched.
+- `next.config.ts`: wrapped with `withSerwistInit` (swSrc
+  `src/app/sw.ts` → swDest `public/sw.js`, `cacheOnNavigation`,
+  `reloadOnOnline`, dev disabled). `package.json` build:
+  `next build --webpack`.
+- `middleware.ts`: short-circuits `/api/health`; allowlist extended
+  for `sw.js`, `swe-worker-*.js`, `workbox-*.js`.
+- `lib/submissions.ts` dead-code purge: removed the four localStorage
+  draft helpers + `Draft` interface (only used by the visit form,
+  which now imports from `lib/db/local`).
+
+**Notes / verification**
+- **Four new dependencies** flagged above; **zero new env vars, zero
+  schema migrations** (server schema unchanged — local Dexie schema
+  is client-only). Build outputs `public/sw.js` + `public/swe-worker-*.js`
+  gitignored (regenerated each build).
+- `npm run build` clean per checkpoint (23 routes incl.
+  `/api/health` + `/manifest.webmanifest` + the new edit route from
+  Cycle 10). `tsc --noEmit` clean.
+- Live verification: `/api/health` GET 200 + JSON; `/manifest.webmanifest`
+  200; `/sw.js` 200 + serwist precache logic; all icons + meta tags
+  intact from Cycle 11.
+- **On-device portion of the live check** (the team's phones; spec-
+  required): installed-PWA airplane-mode flow — open map with cached
+  tiles + schools, fill form offline, force-quit + reopen offline,
+  reconnect → queue drains automatically, cross-device sync, mid-edit
+  race redirect. The SW + Dexie + sync engine + status UI are
+  verified here; **the airplane-mode round-trip on the installed PWA
+  is inherently a device-install check** that the team should do on
+  their phones (or hand to Mark/Jackie).
+- Architectural guardrails: server stays canonical (local DB =
+  write-ahead cache + draft store); no conflict resolution (offline
+  edits only apply to records the server hasn't seen); offline edit
+  of synced records deferred indefinitely; `schema_version=1` is
+  groundwork for future payload changes; session cookie carries the
+  rep through offline use after one online login; auth / admin / AI
+  remain online-only by design.
+- Checkpoint-committed A → H. Live:
+  https://valkolimark-wenger-field-notes.vercel.app
+
 ## Cycle 11 — Standalone/PWA presentation polish (2026-05-18)
 
 The app installs to the home screen as a standalone PWA with the Wenger

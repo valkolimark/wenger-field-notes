@@ -166,6 +166,18 @@ Screen on iOS/Android for a native-feeling, full-screen experience
 (Wenger-navy chrome, notch/home-indicator safe, app icon). The header is
 now layout-aware (edge-to-edge on the full-bleed map, boxed elsewhere).
 
+Cycle 12 made the app **offline-first**. Drafts and saved visits live
+in IndexedDB on the rep's phone; a finished visit shows in My
+Submissions immediately with a "Pending sync" badge and syncs to the
+server when connectivity returns — automatically (on app open, on
+reconnect, every 60s while open) or via the **Sync now** button at the
+top of My Submissions. Pending visits can still be edited or deleted
+offline (deleting a pending visit removes it before it ever reaches the
+server). A small numeric badge on the My Submissions tab shows the
+pending count from anywhere in the app. The map's California tiles
+(zoom 8–14) are cached too, so dead zones still show the map and
+school pins on the installed PWA.
+
 ---
 
 ## License
