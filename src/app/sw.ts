@@ -27,7 +27,6 @@ import type {
 } from "serwist";
 import {
   ExpirationPlugin,
-  NetworkFirst,
   Serwist,
   StaleWhileRevalidate,
 } from "serwist";
@@ -117,50 +116,86 @@ const authRoute: RuntimeCaching = {
   },
 };
 
+// ----------------------------------------------- /form/* prefix fallback
+// /form/[schoolId] renders identical HTML for every school (the school
+// is resolved client-side from useParams + the static list), so any
+// cached /form/* response can satisfy any other school's URL offline.
+// Used by both the RSC and navigation handlers below.
+async function fallbackByPrefix(
+  cacheName: string,
+  url: URL,
+  prefix: string,
+): Promise<Response | undefined> {
+  if (!url.pathname.startsWith(prefix)) return undefined;
+  const cache = await self.caches.open(cacheName);
+  for (const key of await cache.keys()) {
+    if (new URL(key.url).pathname.startsWith(prefix)) {
+      const hit = await cache.match(key);
+      if (hit) return hit;
+    }
+  }
+  return undefined;
+}
+
 // ------------------------------------------------------------------ RSC
 // Next App Router fetches server-component payloads via GET with an
-// RSC: 1 header when the user taps between tabs. NetworkFirst keeps the
-// fresh server response online and falls back to cache offline; on
-// cache miss returns a 504-ish synthetic response so the router can
-// surface a normal error instead of the SW crashing the navigation.
+// RSC: 1 header when the user taps between tabs. Cache on success;
+// offline fall back to exact-match → /form/* prefix → synthetic 504
+// so the router can surface a normal error instead of the SW crashing
+// the navigation.
+const RSC_CACHE = "next-rsc-v1";
 const rscRoute: RuntimeCaching = {
   matcher: ({ request, url }) =>
     url.origin === self.location.origin &&
     request.method === "GET" &&
     request.headers.get("RSC") === "1",
-  handler: new NetworkFirst({
-    cacheName: "next-rsc-v1",
-    networkTimeoutSeconds: 3,
-    plugins: [
-      new ExpirationPlugin({
-        maxEntries: 100,
-        maxAgeSeconds: 7 * 24 * 60 * 60,
-      }),
-    ],
-  }),
-};
-
-// ----------------------------------------------------------- navigations
-// Belt-and-suspenders: explicit cache + offline fallback for top-level
-// navigations (document HTML). On miss, returns cached "/" (the
-// authed shell entry point) so the user never sees the iOS "Safari
-// can't open the page" error.
-const navRoute: RuntimeCaching = {
-  matcher: ({ request, url }) =>
-    request.mode === "navigate" &&
-    url.origin === self.location.origin,
   handler: async ({ request }) => {
-    const cacheName = "pages-v1";
     try {
       const res = await fetch(request);
-      const cache = await self.caches.open(cacheName);
-      void cache.put(request, res.clone());
+      if (res.ok) {
+        const cache = await self.caches.open(RSC_CACHE);
+        void cache.put(request, res.clone());
+      }
       return res;
     } catch {
       const cached = await self.caches.match(request, {
         ignoreVary: true,
       });
       if (cached) return cached;
+      const url = new URL(request.url);
+      const aliased = await fallbackByPrefix(RSC_CACHE, url, "/form/");
+      if (aliased) return aliased;
+      return new Response("", { status: 504 });
+    }
+  },
+};
+
+// ----------------------------------------------------------- navigations
+// Document HTML for top-level navigations. Online → cache + return.
+// Offline → exact-match → /form/* prefix → cached "/" → navy offline
+// stub. Never throw (the iOS PWA "FetchEvent.respondWith received an
+// error" we hit on the first round was this path rejecting).
+const PAGES_CACHE = "pages-v1";
+const navRoute: RuntimeCaching = {
+  matcher: ({ request, url }) =>
+    request.mode === "navigate" &&
+    url.origin === self.location.origin,
+  handler: async ({ request }) => {
+    try {
+      const res = await fetch(request);
+      if (res.ok) {
+        const cache = await self.caches.open(PAGES_CACHE);
+        void cache.put(request, res.clone());
+      }
+      return res;
+    } catch {
+      const cached = await self.caches.match(request, {
+        ignoreVary: true,
+      });
+      if (cached) return cached;
+      const url = new URL(request.url);
+      const aliased = await fallbackByPrefix(PAGES_CACHE, url, "/form/");
+      if (aliased) return aliased;
       const root = await self.caches.match("/", { ignoreVary: true });
       if (root) return root;
       return new Response(
