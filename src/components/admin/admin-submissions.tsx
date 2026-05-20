@@ -16,6 +16,7 @@ import type { AdminUserDTO } from "@/lib/admin";
 import { Button, buttonClass } from "@/components/ui/button";
 import { useToast } from "@/components/ui/toast";
 import { RowsSkeleton } from "@/components/ui/skeleton";
+import { PhotoGallery } from "@/components/photos/photo-gallery";
 import { AdminNav } from "./admin-nav";
 
 type Row = Submission & { createdAt: string };
@@ -401,6 +402,14 @@ export function AdminSubmissions() {
                         </p>
                       </div>
                     )}
+                    <div className="mt-3 border-t border-black/5 pt-3">
+                      <dt className="text-xs font-medium uppercase tracking-wide text-brand-navy/45">
+                        Photos
+                      </dt>
+                      <div className="mt-2">
+                        <PhotoGallery submissionId={s.id} canDelete />
+                      </div>
+                    </div>
                     <div className="mt-4 flex gap-2 border-t border-black/5 pt-3">
                       <Link
                         href={`/submissions/${s.id}/edit`}

@@ -10,6 +10,7 @@ import { getPending, deletePending } from "@/lib/db/local";
 import { Button, buttonClass } from "@/components/ui/button";
 import { useToast } from "@/components/ui/toast";
 import { CollapsibleSection } from "@/components/form/collapsible-section";
+import { PhotoGallery } from "@/components/photos/photo-gallery";
 
 const DASH = "—";
 const SCHOOL_BY_ID = new Map(schools.map((s) => [s.id, s]));
@@ -278,6 +279,14 @@ export function SubmissionDetail({ id }: { id: string }) {
               value={s.marketing.followUpRequested}
             />
           </dl>
+        </CollapsibleSection>
+
+        <CollapsibleSection title="Photos">
+          <PhotoGallery
+            submissionId={s.id}
+            isPending={isPending}
+            canDelete
+          />
         </CollapsibleSection>
 
         <CollapsibleSection title="Notes">
