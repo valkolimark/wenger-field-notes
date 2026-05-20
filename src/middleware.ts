@@ -12,6 +12,10 @@ export default auth((req) => {
   // NextAuth endpoints (incl. /api/auth/signout) always pass through.
   if (path.startsWith("/api/auth")) return;
 
+  // Cycle 12: /api/health is a public connectivity probe used by the
+  // sync engine — must never 302 (would falsely read "online").
+  if (path === "/api/health") return;
+
   if (path === "/") {
     if (!isAuthed) return; // show the login page
     return Response.redirect(
