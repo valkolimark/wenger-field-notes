@@ -3,12 +3,15 @@
 import { useEffect, useReducer, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { ArrowLeft } from "lucide-react";
+import { useLiveQuery } from "dexie-react-hooks";
 import type { School } from "@/lib/schools";
 import { useSession } from "next-auth/react";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/components/ui/toast";
 import { CollapsibleSection } from "./collapsible-section";
 import { RadioGroup, CheckboxGroup, TextField, TextArea } from "./fields";
+import { PhotoStrip } from "./photo-strip";
+import { PhotoSheet } from "./photo-sheet";
 import {
   type VisitFormData,
   type Submission,
@@ -34,7 +37,18 @@ import {
   clearDraft,
   enqueuePending,
   updatePendingContent,
+  localDb,
+  enqueuePhoto,
+  updateLocalPhotoCaption,
+  deleteLocalPhoto,
+  type LocalPhotoRow,
 } from "@/lib/db/local";
+import {
+  compressForUpload,
+  newPhotoId,
+  MAX_PHOTOS_PER_SUBMISSION,
+  PHOTOS_WARN_THRESHOLD,
+} from "@/lib/photos";
 import { drainOnce } from "@/lib/sync";
 
 type Action =
@@ -74,6 +88,10 @@ function reducer(state: VisitFormData, action: Action): VisitFormData {
   }
 }
 
+// Stable default for useLiveQuery so the form doesn't tear when the
+// subscription hasn't returned yet on first render.
+const EMPTY_PHOTOS: LocalPhotoRow[] = [];
+
 /** The editable VisitFormData carried by an existing submission, deep
  *  cloned so the reducer never mutates the loaded row. */
 function initialFormData(sub?: Submission): VisitFormData {
@@ -103,7 +121,7 @@ export function VisitForm({
 }) {
   const router = useRouter();
   const { data: session } = useSession();
-  const { success, confirm } = useToast();
+  const { success, error: toastError, confirm } = useToast();
   const repId = session?.user?.repId ?? "";
   const repName = session?.user?.name ?? session?.user?.email ?? "";
 
@@ -122,6 +140,17 @@ export function VisitForm({
   const [saved, setSaved] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
 
+  // Cycle 13: stable submissionId so photos enqueued to Dexie before
+  // save can reference a known parent across refreshes/force-quits.
+  // - new visit: minted lazily (newSubmissionId(school.id)); persisted
+  //   onto the draft so a refresh restores it.
+  // - edit:     fixed to editSubmission.id.
+  const [submissionId, setSubmissionId] = useState<string>(() =>
+    editSubmission ? editSubmission.id : "",
+  );
+  const [activePhotoId, setActivePhotoId] = useState<string | null>(null);
+  const warnedAtThresholdRef = useRef(false);
+
   const priorityRef = useRef<HTMLDivElement>(null);
   const baselineRef = useRef<string>(
     JSON.stringify(initialFormData(editSubmission)),
@@ -130,56 +159,164 @@ export function VisitForm({
 
   // Restore an existing draft once (per rep + school) — new-visit only.
   // Cycle 12: drafts now live in IndexedDB (Dexie); loader is async.
+  // Cycle 13: if the draft carries a submissionId, adopt it; otherwise
+  //   mint one (will be persisted on the next autosave).
   useEffect(() => {
     if (isEdit || restoredRef.current || !repId) return;
     restoredRef.current = true;
     let cancelled = false;
     void (async () => {
       const draft = await loadDraft(repId, school.id);
-      if (cancelled || !draft) return;
-      dispatch({ type: "load", data: draft.data });
-      baselineRef.current = JSON.stringify(draft.data);
-      setDraftAt(draft.updatedAt);
+      if (cancelled) return;
+      if (draft) {
+        dispatch({ type: "load", data: draft.data });
+        baselineRef.current = JSON.stringify(draft.data);
+        setDraftAt(draft.updatedAt);
+        setSubmissionId(draft.submissionId ?? newSubmissionId(school.id));
+      } else {
+        setSubmissionId(newSubmissionId(school.id));
+      }
     })();
     return () => {
       cancelled = true;
     };
   }, [isEdit, repId, school.id]);
 
+  // Cycle 13: live photo list for this submission (Dexie subscription).
+  // useLiveQuery re-runs when the photos table changes; we pass
+  // `submissionId` in deps so the query rebinds when it becomes
+  // available after the draft restore.
+  const livePhotos = useLiveQuery(
+    () =>
+      submissionId
+        ? localDb.photos
+            .where("submissionId")
+            .equals(submissionId)
+            .sortBy("createdAtLocal")
+        : Promise.resolve([] as LocalPhotoRow[]),
+    [submissionId],
+    EMPTY_PHOTOS,
+  );
+
   const isDirty = JSON.stringify(form) !== baselineRef.current;
+  // Cycle 13: "dirty" for the back-confirm now also covers any local
+  // photos captured this session. Server-side existing photos (synced
+  // submissions in edit mode) don't live in Dexie so they don't trip
+  // the prompt.
+  const hasLocalPhotos = (livePhotos?.length ?? 0) > 0;
 
   // Debounced draft autosave (500ms per Cycle 12) — new-visit only;
   // never in edit mode. Fire-and-forget; Dexie put is async.
+  // Cycle 13: now also persists `submissionId` onto the draft so a
+  // refresh restores the same identity.
   useEffect(() => {
-    if (isEdit || !repId || !isDirty || saved) return;
+    if (isEdit || !repId || !submissionId || !isDirty || saved) return;
     const t = setTimeout(() => {
-      void saveDraft(repId, school.id, form);
+      void saveDraft(repId, school.id, form, submissionId);
     }, 500);
     return () => clearTimeout(t);
-  }, [isEdit, form, repId, school.id, isDirty, saved]);
+  }, [isEdit, form, repId, school.id, submissionId, isDirty, saved]);
 
-  function discardDraft() {
+  async function deleteLocalPhotosForThisSubmission() {
+    if (!submissionId) return;
+    const rows = await localDb.photos
+      .where("submissionId")
+      .equals(submissionId)
+      .toArray();
+    await Promise.all(rows.map((p) => deleteLocalPhoto(p.id)));
+  }
+
+  async function discardDraft() {
     void clearDraft(repId, school.id);
+    await deleteLocalPhotosForThisSubmission();
     const empty = createEmptyForm();
     dispatch({ type: "load", data: empty });
     baselineRef.current = JSON.stringify(empty);
     setDraftAt(null);
+    // Mint a fresh submissionId so subsequent capture doesn't latch
+    // onto the abandoned id.
+    setSubmissionId(newSubmissionId(school.id));
+    warnedAtThresholdRef.current = false;
   }
 
   async function handleBack() {
-    if (isDirty) {
+    if (isDirty || hasLocalPhotos) {
       const ok = await confirm({
         title: "Discard unsaved changes?",
-        body: "Your edits to this visit haven't been saved.",
+        body: hasLocalPhotos
+          ? "Your edits and any photos added on this device will be removed."
+          : "Your edits to this visit haven't been saved.",
         confirmLabel: "Discard",
         destructive: true,
       });
       if (!ok) return;
+      if (hasLocalPhotos) {
+        await deleteLocalPhotosForThisSubmission();
+      }
     }
     router.push(
       isEdit ? `/submissions/${editSubmission!.id}` : "/map",
     );
   }
+
+  async function handleAddPhoto(file: File) {
+    if (!submissionId) return;
+    const current = livePhotos?.length ?? 0;
+    if (current >= MAX_PHOTOS_PER_SUBMISSION) {
+      toastError(
+        `You've reached the ${MAX_PHOTOS_PER_SUBMISSION}-photo limit for one visit.`,
+      );
+      return;
+    }
+    try {
+      const compressed = await compressForUpload(file);
+      await enqueuePhoto({
+        id: newPhotoId(),
+        submissionId,
+        blob: compressed.blob,
+        thumbnailDataUrl: compressed.thumbnailDataUrl,
+        caption: "",
+        mimeType: compressed.mimeType,
+        fileSize: compressed.fileSize,
+        width: compressed.width,
+        height: compressed.height,
+        takenAt: new Date().toISOString(),
+      });
+      const after = current + 1;
+      if (
+        after >= PHOTOS_WARN_THRESHOLD &&
+        !warnedAtThresholdRef.current &&
+        after < MAX_PHOTOS_PER_SUBMISSION
+      ) {
+        warnedAtThresholdRef.current = true;
+        toastError(
+          `Heads up: ${after} photos on this visit — keep it tight (max ${MAX_PHOTOS_PER_SUBMISSION}).`,
+        );
+      }
+    } catch (e) {
+      const msg =
+        e instanceof Error
+          ? e.message
+          : "Couldn't read that photo — try another.";
+      toastError(msg);
+    }
+  }
+
+  async function handleCaptionChange(id: string, caption: string) {
+    await updateLocalPhotoCaption(id, caption);
+  }
+
+  async function handleDeletePhoto(id: string) {
+    await deleteLocalPhoto(id);
+  }
+
+  // If `activePhotoId` references a photo that was just deleted from
+  // Dexie, `activePhoto` is undefined and the sheet simply unmounts —
+  // the stale id is harmless (next open replaces it).
+  const activePhoto =
+    activePhotoId != null
+      ? (livePhotos ?? []).find((p) => p.id === activePhotoId) ?? null
+      : null;
 
   function handleMetWith(next: string[]) {
     dispatch({
@@ -278,8 +415,10 @@ export function VisitForm({
     // Write to the Dexie pending queue; the sync engine drains it when
     // /api/health says we're online. The row appears in My Submissions
     // immediately via the useLiveQuery merge.
+    // Cycle 13: use the stable submissionId we minted up-front so any
+    // photos already captured for this visit reference this same row.
     const submission: Submission = {
-      id: newSubmissionId(school.id),
+      id: submissionId || newSubmissionId(school.id),
       schoolId: school.id,
       schoolName: school.name,
       repId,
@@ -557,6 +696,15 @@ export function VisitForm({
           />
         </CollapsibleSection>
 
+        <CollapsibleSection title="Photos">
+          <PhotoStrip
+            photos={livePhotos ?? EMPTY_PHOTOS}
+            onAdd={(file) => void handleAddPhoto(file)}
+            onSelect={setActivePhotoId}
+            disabled={!submissionId}
+          />
+        </CollapsibleSection>
+
         <CollapsibleSection title="Notes">
           <TextArea
             label="Visit notes"
@@ -565,11 +713,17 @@ export function VisitForm({
             value={form.notes}
             onChange={(v) => dispatch({ type: "notes", value: v })}
           />
-          <p className="text-xs text-brand-navy/45">
-            Photo attachments arrive in a later cycle.
-          </p>
         </CollapsibleSection>
       </div>
+
+      {activePhoto && (
+        <PhotoSheet
+          photo={activePhoto}
+          onCaptionChange={(c) => handleCaptionChange(activePhoto.id, c)}
+          onDelete={() => handleDeletePhoto(activePhoto.id)}
+          onClose={() => setActivePhotoId(null)}
+        />
+      )}
 
       {/* Fixed save bar — full-bleed, above the mobile tab bar */}
       <div className="fixed inset-x-0 bottom-[calc(3.5rem_+_env(safe-area-inset-bottom))] z-20 border-t border-black/8 bg-white/95 px-5 py-3 backdrop-blur-md md:bottom-0">

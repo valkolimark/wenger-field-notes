@@ -34,6 +34,13 @@ export interface DraftRow {
   repId: string;
   schoolId: string;
   data: VisitFormData;
+  /** Cycle 13: stable submission id generated at first capture/edit
+   *  so photos enqueued to Dexie can reference a known parent even
+   *  before the rep saves. Carried into the eventual Submission on
+   *  save (so the photos table FK is correct).
+   *  Optional for backward compat with v1 drafts written pre-Cycle 13;
+   *  the form mints one and persists it on first autosave. */
+  submissionId?: string;
   updatedAt: string; // ISO
 }
 
@@ -139,6 +146,7 @@ export async function saveDraft(
   repId: string,
   schoolId: string,
   data: VisitFormData,
+  submissionId?: string,
 ): Promise<void> {
   if (!hasBrowserDb()) return;
   try {
@@ -147,6 +155,7 @@ export async function saveDraft(
       repId,
       schoolId,
       data,
+      ...(submissionId ? { submissionId } : {}),
       updatedAt: new Date().toISOString(),
     });
   } catch {
