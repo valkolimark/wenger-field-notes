@@ -28,7 +28,13 @@ import {
   HEARD_ABOUT_OPTIONS,
   MATERIALS_LEFT_OPTIONS,
 } from "@/lib/submissions";
-import { loadDraft, saveDraft, clearDraft } from "@/lib/db/local";
+import {
+  loadDraft,
+  saveDraft,
+  clearDraft,
+  enqueuePending,
+  updatePendingContent,
+} from "@/lib/db/local";
 
 type Action =
   | { type: "priority"; patch: Partial<VisitFormData["priority"]> }
@@ -86,9 +92,13 @@ function initialFormData(sub?: Submission): VisitFormData {
 export function VisitForm({
   school,
   editSubmission,
+  isPendingEdit = false,
 }: {
   school: School;
   editSubmission?: Submission;
+  /** Cycle 12: edit-mode branch — pending rows are edited in-place in
+   *  Dexie; synced rows go to PATCH /api/submissions/[id]. */
+  isPendingEdit?: boolean;
 }) {
   const router = useRouter();
   const { data: session } = useSession();
@@ -192,10 +202,42 @@ export function VisitForm({
     setSaveError(null);
     setSaving(true);
 
-    // --- Edit: PATCH the existing row. Identity (id/repId/repName/
-    // school/visitDate) is server-preserved regardless of body; sent for
-    // completeness. No localStorage draft is involved. ---
+    // --- Edit branch -------------------------------------------------
+    // Pending row → Dexie update (identity locked; sync engine has not
+    //   seen it yet so this is safe and offline-capable).
+    // Synced row → PATCH /api/submissions/[id] (Cycle 10 behavior).
+    // Mid-sync race (pending → syncing/synced between page load and
+    //   save) is detected by updatePendingContent returning
+    //   {ok:false, reason:"not-pending"}; we redirect to the online
+    //   edit URL with a `?just-synced=1` marker that EditSubmission
+    //   reads to bypass Dexie and re-fetch from the server.
     if (isEdit && editSubmission) {
+      if (isPendingEdit) {
+        const r = await updatePendingContent(editSubmission.id, form);
+        if (!r.ok && r.reason === "not-pending") {
+          setSaving(false);
+          success("This visit just synced — opening online edit");
+          router.replace(
+            `/submissions/${editSubmission.id}/edit?just-synced=1`,
+          );
+          return;
+        }
+        if (!r.ok) {
+          setSaving(false);
+          setSaveError(
+            "Couldn't save your changes on this device — please try again.",
+          );
+          return;
+        }
+        setSaved(true);
+        success("Pending edits saved");
+        setTimeout(
+          () => router.push(`/submissions/${editSubmission.id}`),
+          700,
+        );
+        return;
+      }
+
       try {
         const res = await fetch(
           `/api/submissions/${editSubmission.id}`,
@@ -222,6 +264,10 @@ export function VisitForm({
       return;
     }
 
+    // --- New-visit branch (Cycle 12: local-first) --------------------
+    // Write to the Dexie pending queue; the sync engine drains it when
+    // /api/health says we're online. The row appears in My Submissions
+    // immediately via the useLiveQuery merge.
     const submission: Submission = {
       id: newSubmissionId(school.id),
       schoolId: school.id,
@@ -233,26 +279,21 @@ export function VisitForm({
     };
 
     try {
-      const res = await fetch("/api/submissions", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(submission),
-      });
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      await enqueuePending(submission);
     } catch {
-      // Keep the form filled; the rep can retry.
       setSaving(false);
-      setSaveError("Couldn't save — check your connection and try again.");
+      setSaveError(
+        "Couldn't save on this device — please try again.",
+      );
       return;
     }
 
-    // Only now is it safe to drop the local draft.
     void clearDraft(repId, school.id);
     setSaved(true);
     success("Visit saved");
     setTimeout(
       () => router.push(then === "map" ? "/map" : "/submissions"),
-      then === "map" ? 900 : 1600,
+      then === "map" ? 600 : 1100,
     );
   }
 

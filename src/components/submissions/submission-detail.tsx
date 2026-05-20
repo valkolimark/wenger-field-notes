@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { ArrowLeft, Pencil, Trash2 } from "lucide-react";
 import { schools } from "@/lib/schools";
 import { type Submission, formatVisitDate } from "@/lib/submissions";
+import { getPending, deletePending } from "@/lib/db/local";
 import { Button, buttonClass } from "@/components/ui/button";
 import { useToast } from "@/components/ui/toast";
 import { CollapsibleSection } from "@/components/form/collapsible-section";
@@ -35,24 +36,32 @@ export function SubmissionDetail({ id }: { id: string }) {
   const { success, error: toastError, confirm } = useToast();
   const [status, setStatus] = useState<Status>("loading");
   const [sub, setSub] = useState<Submission | null>(null);
+  const [isPending, setIsPending] = useState(false);
   const [deleting, setDeleting] = useState(false);
 
-  // Anyone who can load this detail is owner-or-admin (server-enforced
-  // by GET /api/submissions/[id]); DELETE re-checks the same.
+  // Cycle 12: pending rows never reached the server — delete locally,
+  // skip the API entirely. Synced rows take the Cycle 10 API path
+  // (owner-or-admin re-checked server-side).
   async function handleDelete() {
     const ok = await confirm({
       title: "Delete this visit?",
-      body: "This permanently removes the submission. This can't be undone.",
+      body: isPending
+        ? "This pending submission hasn't synced yet. Deleting removes it from this device — the server never sees it."
+        : "This permanently removes the submission. This can't be undone.",
       confirmLabel: "Delete",
       destructive: true,
     });
     if (!ok || deleting) return;
     setDeleting(true);
     try {
-      const res = await fetch(`/api/submissions/${id}`, {
-        method: "DELETE",
-      });
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      if (isPending) {
+        await deletePending(id);
+      } else {
+        const res = await fetch(`/api/submissions/${id}`, {
+          method: "DELETE",
+        });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      }
       success("Visit deleted");
       router.push("/submissions");
     } catch {
@@ -63,6 +72,15 @@ export function SubmissionDetail({ id }: { id: string }) {
 
   const load = useCallback(async () => {
     setStatus("loading");
+    // Cycle 12: try the local pending queue first. A pending row never
+    // existed on the server, so a 404 from the API would be misleading.
+    const local = await getPending(id);
+    if (local) {
+      setSub(local);
+      setIsPending(true);
+      setStatus("ok");
+      return;
+    }
     try {
       const res = await fetch(`/api/submissions/${id}`, {
         cache: "no-store",
@@ -73,6 +91,7 @@ export function SubmissionDetail({ id }: { id: string }) {
       }
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       setSub((await res.json()) as Submission);
+      setIsPending(false);
       setStatus("ok");
     } catch {
       setStatus("error");
@@ -148,9 +167,19 @@ export function SubmissionDetail({ id }: { id: string }) {
       {backLink}
 
       <header className="mt-4">
-        <h1 className="text-3xl leading-tight text-brand-navy">
-          {s.schoolName}
-        </h1>
+        <div className="flex flex-wrap items-center gap-2">
+          <h1 className="text-3xl leading-tight text-brand-navy">
+            {s.schoolName}
+          </h1>
+          {isPending && (
+            <span
+              className="rounded-full border border-brand-warm/40 bg-brand-warm-soft/60 px-2 py-0.5 text-[11px] font-medium uppercase tracking-wide text-brand-warm"
+              title="Saved on this device; waiting to sync to the server"
+            >
+              Pending sync
+            </span>
+          )}
+        </div>
         <p className="mt-1 text-sm text-brand-navy/55">
           {school ? `${school.address}, ${school.city} · ` : ""}
           {formatVisitDate(s.visitDate)} · Logged by {s.repName}

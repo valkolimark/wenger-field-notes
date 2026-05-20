@@ -2,9 +2,12 @@
 
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { ArrowLeft } from "lucide-react";
 import { schools, type School } from "@/lib/schools";
 import type { Submission } from "@/lib/submissions";
+import { getPending } from "@/lib/db/local";
+import { useToast } from "@/components/ui/toast";
 import { VisitForm } from "@/components/form/visit-form";
 
 type Status = "loading" | "ok" | "notfound" | "forbidden" | "error";
@@ -20,11 +23,37 @@ const backLink = (
 );
 
 export function EditSubmission({ id }: { id: string }) {
+  // Cycle 12: when the save handler hits a "row syncing/synced" race it
+  // redirects here with `?just-synced=1` — we then bypass Dexie and
+  // load from the server in non-pending mode.
+  const params = useSearchParams();
+  const forceServer = params.get("just-synced") === "1";
+  const { success } = useToast();
+
   const [status, setStatus] = useState<Status>("loading");
   const [sub, setSub] = useState<Submission | null>(null);
+  const [isPendingEdit, setIsPendingEdit] = useState(false);
+
+  // One-shot notice after a race redirect.
+  useEffect(() => {
+    if (forceServer) success("This visit just synced — opening online edit");
+  }, [forceServer, success]);
 
   const load = useCallback(async () => {
     setStatus("loading");
+
+    if (!forceServer) {
+      const local = await getPending(id);
+      if (local && local.status === "pending") {
+        // PendingRow is a Submission superset; the extra fields are
+        // ignored by VisitForm but kept on the object.
+        setSub(local);
+        setIsPendingEdit(true);
+        setStatus("ok");
+        return;
+      }
+    }
+
     try {
       const res = await fetch(`/api/submissions/${id}`, {
         cache: "no-store",
@@ -39,11 +68,12 @@ export function EditSubmission({ id }: { id: string }) {
       }
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       setSub((await res.json()) as Submission);
+      setIsPendingEdit(false);
       setStatus("ok");
     } catch {
       setStatus("error");
     }
-  }, [id]);
+  }, [id, forceServer]);
 
   useEffect(() => {
     void load();
@@ -111,8 +141,6 @@ export function EditSubmission({ id }: { id: string }) {
     );
   }
 
-  // Submissions always reference a static school; fall back to the row's
-  // own school fields defensively if the static list ever changes.
   const school: School =
     schools.find((s) => s.id === sub.schoolId) ??
     ({
@@ -122,5 +150,11 @@ export function EditSubmission({ id }: { id: string }) {
       city: "",
     } as unknown as School);
 
-  return <VisitForm school={school} editSubmission={sub} />;
+  return (
+    <VisitForm
+      school={school}
+      editSubmission={sub}
+      isPendingEdit={isPendingEdit}
+    />
+  );
 }

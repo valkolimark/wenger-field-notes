@@ -6,6 +6,7 @@ import { Map as MapIcon, ChevronRight, Pencil, Trash2 } from "lucide-react";
 import { useSession } from "next-auth/react";
 import { schools } from "@/lib/schools";
 import { formatVisitDate } from "@/lib/submissions";
+import { deletePending } from "@/lib/db/local";
 import { Button, buttonClass } from "@/components/ui/button";
 import { useToast } from "@/components/ui/toast";
 import { RowsSkeleton } from "@/components/ui/skeleton";
@@ -23,20 +24,28 @@ export function SubmissionsList() {
   const { submissions, loading, error, refresh } = useSubmissions();
   const [deletingId, setDeletingId] = useState<string | null>(null);
 
-  async function handleDelete(sid: string) {
+  async function handleDelete(sid: string, isPending: boolean) {
     const ok = await confirm({
       title: "Delete this visit?",
-      body: "This permanently removes the submission. This can't be undone.",
+      body: isPending
+        ? "This pending submission hasn't synced yet. Deleting removes it from this device — the server never sees it."
+        : "This permanently removes the submission. This can't be undone.",
       confirmLabel: "Delete",
       destructive: true,
     });
     if (!ok || deletingId) return;
     setDeletingId(sid);
     try {
-      const res = await fetch(`/api/submissions/${sid}`, {
-        method: "DELETE",
-      });
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      if (isPending) {
+        // Pending rows never reached the server; purge locally and the
+        // useLiveQuery merge removes the row from the list immediately.
+        await deletePending(sid);
+      } else {
+        const res = await fetch(`/api/submissions/${sid}`, {
+          method: "DELETE",
+        });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      }
       success("Visit deleted");
       await refresh();
     } catch {
@@ -100,13 +109,21 @@ export function SubmissionsList() {
                 className="flex items-center gap-3 p-4"
               >
                 <div className="min-w-0 flex-1">
-                  <div className="flex items-center gap-2">
+                  <div className="flex flex-wrap items-center gap-2">
                     <h2 className="truncate text-lg text-brand-navy">
                       {s.schoolName}
                     </h2>
                     <span className="shrink-0 rounded-full bg-brand-navy/8 px-2 py-0.5 text-[11px] font-medium text-brand-navy">
                       {priorityShort(s.priority.visitPriority)}
                     </span>
+                    {s.isPending && (
+                      <span
+                        className="shrink-0 rounded-full border border-brand-warm/40 bg-brand-warm-soft/60 px-2 py-0.5 text-[11px] font-medium text-brand-warm"
+                        title="Saved on this device; waiting to sync"
+                      >
+                        Pending sync
+                      </span>
+                    )}
                   </div>
                   <p className="mt-0.5 text-xs text-brand-navy/50">
                     {CITY_BY_ID.get(s.schoolId)
@@ -136,7 +153,7 @@ export function SubmissionsList() {
                 </Link>
                 <Button
                   variant="ghost"
-                  onClick={() => handleDelete(s.id)}
+                  onClick={() => handleDelete(s.id, !!s.isPending)}
                   disabled={deletingId === s.id}
                   className="flex-1 text-danger hover:bg-danger/5 hover:text-danger"
                 >
