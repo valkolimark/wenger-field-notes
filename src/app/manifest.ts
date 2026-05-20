@@ -9,7 +9,11 @@ export default function manifest(): MetadataRoute.Manifest {
     short_name: "Field Notes",
     description:
       "Field visit notes for the Wenger Corporation California sales team.",
-    start_url: "/",
+    // start_url is /map (not /) so the installed authed PWA doesn't
+    // need to round-trip through the auth redirect on cold launch —
+    // the SW can serve the cached /map directly offline. Unauth users
+    // (rare for an installed PWA) still get redirected to /.
+    start_url: "/map",
     scope: "/",
     display: "standalone",
     orientation: "portrait",

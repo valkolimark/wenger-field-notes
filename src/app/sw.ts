@@ -143,7 +143,7 @@ async function fallbackByPrefix(
 // offline fall back to exact-match → /form/* prefix → synthetic 504
 // so the router can surface a normal error instead of the SW crashing
 // the navigation.
-const RSC_CACHE = "next-rsc-v1";
+const RSC_CACHE = "next-rsc-v2";
 const rscRoute: RuntimeCaching = {
   matcher: ({ request, url }) =>
     url.origin === self.location.origin &&
@@ -160,6 +160,7 @@ const rscRoute: RuntimeCaching = {
     } catch {
       const cached = await self.caches.match(request, {
         ignoreVary: true,
+        ignoreSearch: true,
       });
       if (cached) return cached;
       const url = new URL(request.url);
@@ -175,7 +176,7 @@ const rscRoute: RuntimeCaching = {
 // Offline → exact-match → /form/* prefix → cached "/" → navy offline
 // stub. Never throw (the iOS PWA "FetchEvent.respondWith received an
 // error" we hit on the first round was this path rejecting).
-const PAGES_CACHE = "pages-v1";
+const PAGES_CACHE = "pages-v2";
 const navRoute: RuntimeCaching = {
   matcher: ({ request, url }) =>
     request.mode === "navigate" &&
@@ -191,12 +192,21 @@ const navRoute: RuntimeCaching = {
     } catch {
       const cached = await self.caches.match(request, {
         ignoreVary: true,
+        ignoreSearch: true,
       });
       if (cached) return cached;
       const url = new URL(request.url);
       const aliased = await fallbackByPrefix(PAGES_CACHE, url, "/form/");
       if (aliased) return aliased;
-      const root = await self.caches.match("/", { ignoreVary: true });
+      const root =
+        (await self.caches.match("/map", {
+          ignoreVary: true,
+          ignoreSearch: true,
+        })) ??
+        (await self.caches.match("/", {
+          ignoreVary: true,
+          ignoreSearch: true,
+        }));
       if (root) return root;
       return new Response(
         '<!doctype html><meta charset="utf-8"><title>Offline</title>' +
@@ -210,6 +220,53 @@ const navRoute: RuntimeCaching = {
     }
   },
 };
+
+// ------------------------------------------------------- install prefetch
+// The classic iOS PWA gotcha: the very first navigation to start_url
+// happens BEFORE the freshly-installed SW becomes the controller, so
+// nothing gets cached organically — and when the user later force-quits
+// and reopens offline, the SW (now controlling) intercepts the same URL
+// and finds nothing in cache. Solution: prefetch the canonical routes
+// at SW install so they're populated regardless of who controlled the
+// first nav. SW fetches inherit the client's cookies, so an already-
+// authed user gets authed HTML cached here.
+const PREFETCH_NAV = ["/map", "/submissions", "/", "/account"];
+
+self.addEventListener("install", (event) => {
+  event.waitUntil(
+    (async () => {
+      try {
+        const pages = await self.caches.open(PAGES_CACHE);
+        const rsc = await self.caches.open(RSC_CACHE);
+        await Promise.all(
+          PREFETCH_NAV.map(async (path) => {
+            try {
+              const res = await fetch(path, { credentials: "include" });
+              if (res.ok || res.redirected) {
+                await pages.put(path, res.clone());
+              }
+            } catch {
+              /* ignore: best-effort */
+            }
+            try {
+              const rscRes = await fetch(path, {
+                credentials: "include",
+                headers: { RSC: "1" },
+              });
+              if (rscRes.ok) {
+                await rsc.put(path, rscRes.clone());
+              }
+            } catch {
+              /* ignore: best-effort */
+            }
+          }),
+        );
+      } catch {
+        /* ignore: best-effort */
+      }
+    })(),
+  );
+});
 
 // ----------------------------------------------------------------- init
 const serwist = new Serwist({
