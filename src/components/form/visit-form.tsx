@@ -35,6 +35,7 @@ import {
   enqueuePending,
   updatePendingContent,
 } from "@/lib/db/local";
+import { drainOnce } from "@/lib/sync";
 
 type Action =
   | { type: "priority"; patch: Partial<VisitFormData["priority"]> }
@@ -287,6 +288,11 @@ export function VisitForm({
       );
       return;
     }
+
+    // Kick the sync engine so an online rep sees the row flip to synced
+    // within a couple of seconds, not on the next 60s tick. Offline,
+    // the ping fails and the row stays pending for the next trigger.
+    void drainOnce();
 
     void clearDraft(repId, school.id);
     setSaved(true);
