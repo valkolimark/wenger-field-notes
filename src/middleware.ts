@@ -16,6 +16,15 @@ export default auth((req) => {
   // sync engine — must never 302 (would falsely read "online").
   if (path === "/api/health") return;
 
+  // Cycle 13: /api/photos/upload is the @vercel/blob/client handleUpload
+  // endpoint. The token-generation half is rep-initiated (cookie
+  // present), and is authorized inside the route's onBeforeGenerateToken
+  // via authorizeForSubmission(). The completion half is a server-to-
+  // server callback FROM Vercel Blob with no auth cookie; the SDK
+  // verifies the request signature internally. Either way, middleware
+  // must let it through — a 302 would break both halves.
+  if (path === "/api/photos/upload") return;
+
   if (path === "/") {
     if (!isAuthed) return; // show the login page
     return Response.redirect(

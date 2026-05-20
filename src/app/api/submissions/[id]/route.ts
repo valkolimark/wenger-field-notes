@@ -1,54 +1,15 @@
 import { NextResponse } from "next/server";
 import { eq } from "drizzle-orm";
-import { auth } from "@/lib/auth";
 import { db } from "@/lib/db/client";
-import { submissions, type SubmissionRow } from "@/lib/db/schema";
+import { submissions } from "@/lib/db/schema";
 import type { Submission } from "@/lib/submissions";
+import { authorizeForSubmission } from "@/lib/submission-auth";
 
 export const runtime = "nodejs";
 
-// Owner-or-admin gate for a single submission (defense in depth, same
-// pattern as requireAdmin()). Reps act only on their own rows by session
-// repId; admins on any. Identity is session-derived — never the request
-// body/email (Cycle 6.5 lesson). Order matches the Cycle 6 GET:
-// 401 not signed in → 404 missing → 403 not owner / not admin.
-async function authorizeForRow(
-  id: string,
-): Promise<
-  | { ok: true; row: SubmissionRow; isAdmin: boolean }
-  | { ok: false; res: NextResponse }
-> {
-  const session = await auth();
-  if (!session?.user?.repId) {
-    return {
-      ok: false,
-      res: NextResponse.json({ error: "Not signed in." }, { status: 401 }),
-    };
-  }
-
-  const row = (
-    await db.select().from(submissions).where(eq(submissions.id, id))
-  )[0];
-  if (!row) {
-    return {
-      ok: false,
-      res: NextResponse.json(
-        { error: "Submission not found" },
-        { status: 404 },
-      ),
-    };
-  }
-
-  const isAdmin = session.user.role === "admin";
-  if (!isAdmin && row.repId !== session.user.repId) {
-    return {
-      ok: false,
-      res: NextResponse.json({ error: "Forbidden" }, { status: 403 }),
-    };
-  }
-
-  return { ok: true, row, isAdmin };
-}
+// Owner-or-admin gate moved to lib/submission-auth.ts (Cycle 13) so
+// the photo routes can share it. Behavior unchanged: 401 → 404 → 403,
+// session-derived repId never trusted from the request body.
 
 // GET /api/submissions/[id] — owner or admin only.
 export async function GET(
@@ -57,7 +18,7 @@ export async function GET(
 ) {
   try {
     const { id } = await params;
-    const gate = await authorizeForRow(id);
+    const gate = await authorizeForSubmission(id);
     if (!gate.ok) return gate.res;
     return NextResponse.json(gate.row);
   } catch (err) {
@@ -79,7 +40,7 @@ export async function PATCH(
 ) {
   try {
     const { id } = await params;
-    const gate = await authorizeForRow(id);
+    const gate = await authorizeForSubmission(id);
     if (!gate.ok) return gate.res;
 
     const body = (await req.json()) as Partial<Submission>;
@@ -144,7 +105,7 @@ export async function DELETE(
 ) {
   try {
     const { id } = await params;
-    const gate = await authorizeForRow(id);
+    const gate = await authorizeForSubmission(id);
     if (!gate.ok) return gate.res;
 
     await db.delete(submissions).where(eq(submissions.id, id));
