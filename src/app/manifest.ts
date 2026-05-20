@@ -13,7 +13,10 @@ export default function manifest(): MetadataRoute.Manifest {
     scope: "/",
     display: "standalone",
     orientation: "portrait",
-    background_color: "#0A3758",
+    // Splash background matches the icon's solid blue (#00365A — the
+    // exact circle blue sampled from the source). theme_color stays
+    // Wenger navy (the in-app header).
+    background_color: "#00365A",
     theme_color: "#0A3758",
     icons: [
       {
