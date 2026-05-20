@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Map, ClipboardList, type LucideIcon } from "lucide-react";
+import { useSyncStatus } from "@/lib/sync";
 
 type Tab = { href: string; label: string; icon: LucideIcon };
 
@@ -13,6 +14,8 @@ const TABS: Tab[] = [
 
 export function TabBar() {
   const pathname = usePathname();
+  // Cycle 12: reactive pending count from Dexie — visible from anywhere.
+  const { pendingCount } = useSyncStatus();
 
   return (
     <nav
@@ -33,11 +36,21 @@ export function TabBar() {
                     : "text-brand-navy/45 hover:text-brand-navy/70"
                 }`}
               >
-                <Icon
-                  size={20}
-                  strokeWidth={active ? 2.4 : 2}
-                  aria-hidden
-                />
+                <span className="relative">
+                  <Icon
+                    size={20}
+                    strokeWidth={active ? 2.4 : 2}
+                    aria-hidden
+                  />
+                  {href === "/submissions" && pendingCount > 0 && (
+                    <span
+                      aria-label={`${pendingCount} pending sync`}
+                      className="absolute -right-2 -top-1 inline-flex h-4 min-w-[1rem] items-center justify-center rounded-full bg-brand-warm px-1 text-[10px] font-semibold leading-none text-white"
+                    >
+                      {pendingCount > 99 ? "99+" : pendingCount}
+                    </span>
+                  )}
+                </span>
                 <span>{label}</span>
                 {active && (
                   <span className="absolute inset-x-7 top-0 h-0.5 rounded-full bg-brand-warm md:bottom-0 md:top-auto" />

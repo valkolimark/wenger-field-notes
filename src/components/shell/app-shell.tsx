@@ -2,10 +2,14 @@
 
 import { AppHeader } from "./app-header";
 import { TabBar } from "./tab-bar";
+import { useSyncEngine } from "@/lib/sync";
 
 // Cycle 6: route protection moved to middleware.ts (NextAuth). The shell
 // no longer gates on a localStorage rep — it just renders the chrome.
+// Cycle 12: mounts the offline sync engine (online listener + 60s
+// interval + initial drain). One mount per authed session.
 export function AppShell({ children }: { children: React.ReactNode }) {
+  useSyncEngine();
   return (
     <>
       <AppHeader />

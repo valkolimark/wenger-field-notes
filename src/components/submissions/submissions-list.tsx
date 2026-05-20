@@ -11,6 +11,7 @@ import { Button, buttonClass } from "@/components/ui/button";
 import { useToast } from "@/components/ui/toast";
 import { RowsSkeleton } from "@/components/ui/skeleton";
 import { useSubmissions } from "./use-submissions";
+import { SyncStatusStrip } from "@/components/sync/sync-status-strip";
 
 const CITY_BY_ID = new Map(schools.map((s) => [s.id, s.city]));
 
@@ -67,6 +68,8 @@ export function SubmissionsList() {
   return (
     <section>
       <h1 className="text-3xl text-brand-navy">My Submissions</h1>
+
+      <SyncStatusStrip />
 
       {error && (
         <div className="mt-4 flex items-center justify-between gap-3 rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
