@@ -104,6 +104,95 @@ export async function clearDraft(
 }
 
 // --- pending submissions (offline write-ahead queue) ------------------
-// Helpers populated in Checkpoint D when the visit form goes
-// local-first. The store is created above so Dexie's version(1) stays
-// stable across the cycle.
+// Server is canonical; a pending row exists only between "rep tapped
+// Save" and "sync engine drained it". Status flow:
+//   pending  → enqueued, awaiting sync
+//   syncing  → POST in-flight; edits/deletes redirect to online flow
+//   synced   → transient; rows are deleted immediately on POST 200
+//   failed   → terminal soft-error (retryable; sync engine resets to
+//              pending on next drain)
+
+export async function enqueuePending(
+  sub: Submission,
+): Promise<PendingRow> {
+  if (!hasBrowserDb()) {
+    throw new Error("Local DB unavailable (server context).");
+  }
+  const row: PendingRow = {
+    ...sub,
+    status: "pending",
+    schemaVersion: PENDING_SCHEMA_VERSION,
+    createdAtLocal: new Date().toISOString(),
+    retryCount: 0,
+  };
+  await localDb.pending.put(row);
+  return row;
+}
+
+export async function getPending(id: string): Promise<PendingRow | null> {
+  if (!hasBrowserDb()) return null;
+  try {
+    return (await localDb.pending.get(id)) ?? null;
+  } catch {
+    return null;
+  }
+}
+
+export async function getAllPending(): Promise<PendingRow[]> {
+  if (!hasBrowserDb()) return [];
+  try {
+    return await localDb.pending.toArray();
+  } catch {
+    return [];
+  }
+}
+
+export async function getPendingByRep(
+  repId: string,
+): Promise<PendingRow[]> {
+  if (!hasBrowserDb()) return [];
+  try {
+    return await localDb.pending.where("repId").equals(repId).toArray();
+  } catch {
+    return [];
+  }
+}
+
+/** Edit the form content of a still-`pending` row; identity stays put. */
+export async function updatePendingContent(
+  id: string,
+  patch: VisitFormData,
+): Promise<{ ok: boolean; reason?: "missing" | "not-pending" }> {
+  if (!hasBrowserDb()) return { ok: false, reason: "missing" };
+  const row = await localDb.pending.get(id);
+  if (!row) return { ok: false, reason: "missing" };
+  if (row.status !== "pending") return { ok: false, reason: "not-pending" };
+  await localDb.pending.update(id, {
+    priority: patch.priority,
+    contact: patch.contact,
+    purchasing: patch.purchasing,
+    decisionMaking: patch.decisionMaking,
+    marketing: patch.marketing,
+    notes: patch.notes,
+  });
+  return { ok: true };
+}
+
+export async function setPendingStatus(
+  id: string,
+  status: PendingStatus,
+  extra: Partial<Pick<PendingRow, "lastError" | "retryCount">> = {},
+): Promise<void> {
+  if (!hasBrowserDb()) return;
+  await localDb.pending.update(id, {
+    status,
+    lastAttemptAt: new Date().toISOString(),
+    ...extra,
+  });
+}
+
+export async function deletePending(id: string): Promise<void> {
+  if (!hasBrowserDb()) return;
+  await localDb.pending.delete(id);
+}
+
