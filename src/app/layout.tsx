@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import "./globals.css";
 import { Providers } from "@/components/providers";
+import { RegisterSW } from "@/components/sw/register-sw";
 
 export const metadata: Metadata = {
   title: "Wenger Field Notes",
@@ -37,6 +38,7 @@ export default function RootLayout({
     <html lang="en" className="h-full antialiased">
       <body className="flex min-h-full flex-col font-sans">
         <Providers>{children}</Providers>
+        <RegisterSW />
       </body>
     </html>
   );
