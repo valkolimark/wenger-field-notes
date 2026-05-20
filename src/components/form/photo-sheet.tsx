@@ -7,9 +7,10 @@
 // modal in <ToastProvider> for shape/animation.
 
 import { useEffect, useState } from "react";
-import { X, Trash2 } from "lucide-react";
+import { X, Trash2, RotateCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import type { LocalPhotoRow } from "@/lib/db/local";
+import { retryPhoto } from "@/lib/sync";
 
 const MAX_CAPTION = 120;
 
@@ -120,6 +121,13 @@ export function PhotoSheet({
             </div>
           </div>
 
+          {photo.status === "failed" && (
+            <div className="rounded-xl border border-danger/30 bg-danger/[0.05] px-3 py-2 text-xs text-danger">
+              Upload didn&apos;t finish after several tries
+              {photo.lastError ? ` (${photo.lastError})` : ""}.
+            </div>
+          )}
+
           <div className="flex items-center gap-2">
             <Button
               variant="secondary"
@@ -131,6 +139,20 @@ export function PhotoSheet({
             >
               Done
             </Button>
+            {photo.status === "failed" && (
+              <Button
+                variant="primary"
+                onClick={async () => {
+                  await retryPhoto(photo.id);
+                  onClose();
+                }}
+                aria-label="Retry upload"
+                className="px-3"
+              >
+                <RotateCw size={16} aria-hidden />
+                Retry
+              </Button>
+            )}
             <Button
               variant="destructive"
               onClick={handleDelete}
