@@ -4,9 +4,20 @@
 
 // Cycle 12: Serwist-managed service worker. Build-time serwist replaces
 // self.__SW_MANIFEST with the precache list (app shell + _next/static +
-// static assets). Runtime caching:
-//   - OSM tiles within the CA bbox at zooms 8–14 (SWR, 30-day expiry)
-//   - @serwist/next defaultCache for Next assets, fonts, nav docs.
+// static assets).
+//
+// Runtime caching, ordered (first match wins):
+//   1. OSM tiles within the CA bbox at zooms 8–14 (SWR, 30-day expiry)
+//   2. /api/auth/* — try network, never reject (synthetic 503 offline)
+//      so NextAuth client polling can't crash the page with
+//      `FetchEvent.respondWith received an error: no-response`.
+//   3. RSC payload fetches (RSC: 1 header) — NetworkFirst with cache
+//      fallback. Without this, tapping between tabs offline fails
+//      (App Router fetches the server-component payload on nav).
+//   4. Same-origin navigations — NetworkFirst with cache fallback; on
+//      cache miss falls back to "/" (or a synthetic offline HTML).
+//   5. @serwist/next defaultCache for everything else (Next assets,
+//      fonts, etc.).
 
 import { defaultCache } from "@serwist/next/worker";
 import type {
@@ -16,6 +27,7 @@ import type {
 } from "serwist";
 import {
   ExpirationPlugin,
+  NetworkFirst,
   Serwist,
   StaleWhileRevalidate,
 } from "serwist";
@@ -27,8 +39,9 @@ declare global {
 }
 declare const self: ServiceWorkerGlobalScope;
 
-// California bounding box (rough rectangle covering the state — close
-// enough; tiles outside fall through to network).
+// ------------------------------------------------------------------ OSM
+// California bounding box (rough rectangle; tiles outside fall through
+// to network and are not cached).
 const CA = {
   lonMin: -124.5,
   lonMax: -114.0,
@@ -53,7 +66,6 @@ function latToTileY(lat: number, z: number): number {
       2 ** z,
   );
 }
-
 function isCATile(url: URL): boolean {
   if (!OSM_TILE_HOSTS.has(url.host)) return false;
   const m = /^\/(\d{1,2})\/(\d+)\/(\d+)\.png$/.exec(url.pathname);
@@ -78,22 +90,107 @@ const osmTilesRoute: RuntimeCaching = {
       new ExpirationPlugin({
         maxEntries: 800,
         maxAgeSeconds: 30 * 24 * 60 * 60,
-        // Required by serwist's ExpirationPlugin when used with a
-        // non-Cache-API-managed origin (cross-origin OSM tiles).
         purgeOnQuotaError: true,
       }),
     ],
   }),
 };
 
+// ----------------------------------------------------------------- auth
+// NextAuth client periodically pings /api/auth/session and may redirect
+// to /api/auth/error on failure. Offline, those throw inside the SW and
+// surface as "FetchEvent.respondWith received an error: no-response".
+// Always return a real Response so respondWith never rejects.
+const authRoute: RuntimeCaching = {
+  matcher: ({ url }) =>
+    url.origin === self.location.origin &&
+    url.pathname.startsWith("/api/auth"),
+  handler: async ({ request }) => {
+    try {
+      return await fetch(request);
+    } catch {
+      return new Response(JSON.stringify({ error: "offline" }), {
+        status: 503,
+        headers: { "content-type": "application/json" },
+      });
+    }
+  },
+};
+
+// ------------------------------------------------------------------ RSC
+// Next App Router fetches server-component payloads via GET with an
+// RSC: 1 header when the user taps between tabs. NetworkFirst keeps the
+// fresh server response online and falls back to cache offline; on
+// cache miss returns a 504-ish synthetic response so the router can
+// surface a normal error instead of the SW crashing the navigation.
+const rscRoute: RuntimeCaching = {
+  matcher: ({ request, url }) =>
+    url.origin === self.location.origin &&
+    request.method === "GET" &&
+    request.headers.get("RSC") === "1",
+  handler: new NetworkFirst({
+    cacheName: "next-rsc-v1",
+    networkTimeoutSeconds: 3,
+    plugins: [
+      new ExpirationPlugin({
+        maxEntries: 100,
+        maxAgeSeconds: 7 * 24 * 60 * 60,
+      }),
+    ],
+  }),
+};
+
+// ----------------------------------------------------------- navigations
+// Belt-and-suspenders: explicit cache + offline fallback for top-level
+// navigations (document HTML). On miss, returns cached "/" (the
+// authed shell entry point) so the user never sees the iOS "Safari
+// can't open the page" error.
+const navRoute: RuntimeCaching = {
+  matcher: ({ request, url }) =>
+    request.mode === "navigate" &&
+    url.origin === self.location.origin,
+  handler: async ({ request }) => {
+    const cacheName = "pages-v1";
+    try {
+      const res = await fetch(request);
+      const cache = await self.caches.open(cacheName);
+      void cache.put(request, res.clone());
+      return res;
+    } catch {
+      const cached = await self.caches.match(request, {
+        ignoreVary: true,
+      });
+      if (cached) return cached;
+      const root = await self.caches.match("/", { ignoreVary: true });
+      if (root) return root;
+      return new Response(
+        '<!doctype html><meta charset="utf-8"><title>Offline</title>' +
+          '<body style="font:16px ui-sans-serif,system-ui;padding:2rem;' +
+          'background:#0A3758;color:#fff">' +
+          "You're offline and this page hasn't been cached yet. " +
+          "Reconnect, open the page once, then it'll work offline." +
+          "</body>",
+        { status: 503, headers: { "content-type": "text/html" } },
+      );
+    }
+  },
+};
+
+// ----------------------------------------------------------------- init
 const serwist = new Serwist({
   precacheEntries: self.__SW_MANIFEST,
   skipWaiting: true,
   clientsClaim: true,
   navigationPreload: true,
-  // CA tile route first so it wins before defaultCache's generic
-  // image/cross-origin handlers.
-  runtimeCaching: [osmTilesRoute, ...defaultCache],
+  // Order matters: more-specific matchers first; defaultCache last
+  // as the generic backstop.
+  runtimeCaching: [
+    osmTilesRoute,
+    authRoute,
+    rscRoute,
+    navRoute,
+    ...defaultCache,
+  ],
 });
 
 serwist.addEventListeners();
