@@ -101,3 +101,18 @@ body {
   color: var(--foreground);
   font-family: var(--font-sans);
 }
+
+/* iOS Safari auto-zooms when an input/textarea/select is focused with a
+   font-size < 16px. The zoom shifts the layout (fixed header, save bar,
+   tab bar) and on a notched device causes content overlap. Forcing 16px
+   on mobile viewports neutralizes the zoom while leaving the existing
+   Tailwind text-sm sizing in place on desktop (no auto-zoom there).
+   Excludes checkboxes/radios/hidden inputs — they don't trigger zoom
+   and would render awkwardly at 16px. */
+@media (max-width: 640px) {
+  input:not([type="checkbox"]):not([type="radio"]):not([type="hidden"]),
+  textarea,
+  select {
+    font-size: 16px;
+  }
+}
