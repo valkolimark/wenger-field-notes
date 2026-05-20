@@ -6,6 +6,159 @@ Format: `## Cycle N — Title (YYYY-MM-DD)` followed by a short prose summary, t
 
 ---
 
+## Cycle 13 — Photo capture & vision summaries (2026-05-20)
+
+Reps now attach photos to a visit; photos persist through dead zones,
+sync to Vercel Blob automatically when connectivity returns, and feed
+Claude as vision input on every summary. Built as **one cycle, eight
+checkpoints (A–H)** like Cycle 12 — deliberate override of the
+"one slice per cycle" rule, user-approved at the proceed gate.
+
+**GATE decisions (approved):**
+- **Direct upload** via `@vercel/blob/client.upload()` with a server-side
+  `handleUpload` route — file bytes never touch the Next.js function.
+- **Soft-delete** for photos: `deleted_at` column flips on DELETE; blob
+  bytes intentionally orphaned (future cleanup pass reaps them).
+- **Cap 20 / warn at 15** photos per submission, surfaced via toast
+  in the visit form and enforced server-side in the summarize route.
+
+**GATE amendments (during build):**
+- **Q4 (URL visibility): public-by-URL → PRIVATE store + server-side
+  proxy.** The Vercel Blob store provisioned via the dashboard turned
+  out to be private (the modern default, not the public-by-URL Q4 gate
+  assumed). Rather than flip the store, kept it private and added
+  `GET /api/photos/[id]/file` — an owner-or-admin gated proxy that
+  streams private bytes via `@vercel/blob.get(url, { access: 'private' })`
+  with `Cache-Control: private, max-age=3600`. Claude vision base64-
+  encodes server-side instead of consuming a URL. Stronger security
+  posture; consistent with `ANTHROPIC_API_KEY` / `DATABASE_URL` /
+  `SEED_PASSWORD` all being Sensitive.
+- **Q6 (SDK image syntax): non-issue.** `@anthropic-ai/sdk@0.96.0`
+  exposes `Base64ImageSource` (the path we use) and `URLImageSource`,
+  but no `detail` field — because Claude vision has no OpenAI-style
+  detail knob. Image token cost is fixed by resolution; one tier per
+  image. SDK stays pinned at 0.96.0.
+
+**Spec deviation (flagged):**
+- `LocalPhotoRow.submissionId` is the photo→submission linkage (indexed
+  in Dexie), not `photoIds: string[]` on `PendingRow` as the spec
+  sketched. Both designs work; the one-way approach is normal-form,
+  lets photos and submissions sync independently, and means
+  `PENDING_SCHEMA_VERSION` stays at 1 (no on-the-wire change for
+  queued submissions).
+
+**Added**
+- **Postgres `photos` table** (migration 0002_motionless_doctor_faustus,
+  applied to Neon): text PK, denormalized `submission_id`/`rep_id`/
+  `school_id` (no FK — string-key convention from `submissions.rep_id`),
+  `blob_url` + `blob_pathname`, `caption`, `mime_type`, `file_size`,
+  optional `width`/`height`, `taken_at`, `uploaded_at`, `created_at`,
+  `deleted_at` (soft-delete). Indexes on `submission_id`/`rep_id`/
+  `school_id`. New types `PhotoRow` and `InsertPhoto`.
+- **Dexie v2** — third store `photos` (`&id, submissionId, status,
+  createdAtLocal`). New `LocalPhotoStatus = pending|uploading|uploaded|
+  failed`, `LocalPhotoRow` (Blob + thumbnailDataUrl + status +
+  bookkeeping), `PHOTOS_SCHEMA_VERSION = 1`, helpers `enqueuePhoto`/
+  `getLocalPhoto`/`getPhotosBySubmission`/`getAllPendingPhotos`/
+  `setPhotoStatus`/`updateLocalPhotoCaption`/`deleteLocalPhoto`.
+  `DraftRow` gained optional `submissionId` so photos enqueued before
+  save reference a known parent across reloads/force-quits.
+- **`src/lib/photos.ts`** — `compressForUpload()` (≤1600px long edge,
+  JPEG q0.8, target ≤1MB via `browser-image-compression` Web Worker),
+  240px thumbnail via canvas, transient `HTMLImageElement` for dims.
+  `MAX_PHOTOS_PER_SUBMISSION=20`, `PHOTOS_WARN_THRESHOLD=15`.
+- **`<PhotoStrip>` + `<PhotoSheet>` in the visit form** — Photos
+  collapsible section between Marketing and Notes. Hidden
+  `<input type="file" accept="image/*" capture="environment">`,
+  88×88 thumbnails with status pill, per-photo bottom sheet
+  (caption max 120, on-blur save, destructive Delete, Retry on
+  failed). One-shot warm-tone heads-up toast at 15.
+- **Server routes (4 new):**
+  - `POST /api/photos/upload` — direct upload, `handleUpload`
+    authorizes via `authorizeForSubmission` against the parent row;
+    `onUploadCompleted` inserts the photos row with **trusted**
+    server-side `repId`/`schoolId` packed into tokenPayload.
+  - `GET /api/submissions/[id]/photos` — owner-or-admin DTO list.
+  - `DELETE /api/photos/[id]` — soft-delete (flips `deleted_at`).
+  - `GET /api/photos/[id]/file` — private-blob proxy.
+- **`src/lib/submission-auth.ts`** — `authorizeForSubmission(id)`
+  extracted from `/api/submissions/[id]/route.ts` (Cycle 10) so the
+  Cycle 13 photo routes reuse the 401→404→403 matrix.
+- **Sync engine two-phase**: `drainPendingSubmissions()` (existing
+  logic, named helper) → `drainPendingPhotos()`. Ordering guard:
+  photos whose parent submission is still in the Dexie pending store
+  skip this drain. Per-photo retry cap of 5 attempts → terminal
+  `failed`; manual `retryPhoto(id)` resets and re-kicks.
+- **`<PhotoGallery>` + `<PhotoLightbox>`** (`src/components/photos/`):
+  3-col mobile / 4-col sm+ grid that merges server photos (via the
+  proxy URL) with local pending Dexie rows (deduped). Lightbox uses
+  Object URL on local Blobs for full quality, the proxy for synced.
+  Owner/admin Delete via confirm modal.
+  Wired into `/submissions/[id]` (between Marketing and Notes) and
+  the `/admin` Submissions expandable detail.
+- **`/api/summarize` vision input**: prompts now return
+  `ContentBlockParam[]` (text + base64 image blocks). All three scopes
+  (`pipeline`/`rep`/new `visit`) inject the photo grid. The system
+  prompt grew a Photos paragraph (reference what you actually see;
+  prefer photo over contradicting caption; never invent details).
+  Cost log now includes `photos` (sent) and `photosDropped` (over-cap
+  fallback aggregate); still no submission content logged.
+- **`/admin` Deep analysis button** — eye icon on the expandable row,
+  visible only when the row's loaded photo count > 0. Reuses the
+  existing streaming summary panel via a discriminated `runSummary`
+  union (`pipeline | rep | visit`).
+
+**Changed**
+- `useSyncStatus` extended (additive — no breaking changes): existing
+  `pendingCount`/`syncing`/`hasFailed` stay submission-only; new
+  `pendingPhotos`/`photosUploading`/`photosFailed`/`totalUnfinished`.
+- `<SyncStatusStrip>` extended on `/submissions`: same calm "All
+  synced" empty state; warm-toned line now reads "⏳ N pending sync ·
+  M photo(s) uploading" with either side hidden when zero.
+- `<TabBar>` Submissions badge now counts `totalUnfinished` so a
+  photo-only queue is visible from any screen.
+- `<VisitForm>` lifted `submissionId` to component state so photos can
+  be enqueued before the rep saves. New-visit: minted lazily and
+  persisted on the draft. Edit: fixed to `editSubmission.id`.
+  `discardDraft` + `handleBack` now also delete every local photo with
+  this submissionId (orphan cleanup); back-confirm body adapts when
+  local photos are present.
+- Middleware: `/api/photos/upload` joins `/api/auth/*` and `/api/health`
+  in the public-passthrough list. The Vercel Blob completion callback
+  hits the route server-to-server with no auth cookie; the SDK
+  verifies signatures internally. A 302 would break both halves.
+
+**Notes / verification**
+- **Two new dependencies** (pinned exact, flagged):
+  `@vercel/blob@2.4.0`, `browser-image-compression@2.0.2`.
+- **One new env var** (Sensitive): `BLOB_READ_WRITE_TOKEN` — auto-
+  created by the Vercel Blob dashboard integration on Prod/Preview/
+  Dev. Like `DATABASE_URL` and `ANTHROPIC_API_KEY`, `vercel env pull`
+  returns it blank; copy manually into `.env.local` for local dev.
+- **One schema migration**: `drizzle/0002_motionless_doctor_faustus.sql`
+  applied to Neon via `npx drizzle-kit migrate`. Verified live: 15
+  columns + 4 indexes (pkey + the 3 named indexes).
+- **Local Blob smoke** verified at Checkpoint A against the live store:
+  put(access:'private'), anonymous fetch → 403, get(access:'private')
+  → 200 with bytes, del() ok.
+- `npm run build` clean (27 routes incl. 4 new photo routes).
+  `tsc --noEmit` clean across all 8 checkpoints. Existing lint
+  errors (in `submission-detail.tsx`/`use-submissions.ts`) carry
+  over from prior cycles; no new errors from Cycle 13 code.
+- **`onUploadCompleted` is a server-to-server callback from Vercel
+  Blob.** In `npm run dev` on localhost Vercel can't reach back; the
+  token-generation half works locally, but the photos row only lands
+  after deployment to a Vercel preview/prod URL.
+- **On-device portion of the live check** (the team's phones; spec-
+  required): capture → reload → photo persists → reconnect → drain →
+  thumbnail appears via the proxy. Pipeline + Deep-analysis summaries
+  visibly reference photographed details. The upload + sync engine +
+  status UI + admin Deep-analysis button are verified here; the
+  airplane-mode photo round-trip on the installed PWA is inherently
+  a device-install check that the team should do on their phones.
+- Checkpoint-committed A → H. Live:
+  https://valkolimark-wenger-field-notes.vercel.app
+
 ## Cycle 12 — Offline-first foundation (2026-05-19)
 
 The submission flow is now **local-first**: reps work through dead zones

@@ -15,7 +15,10 @@ const TABS: Tab[] = [
 export function TabBar() {
   const pathname = usePathname();
   // Cycle 12: reactive pending count from Dexie — visible from anywhere.
-  const { pendingCount } = useSyncStatus();
+  // Cycle 13: badge now counts photos too via `totalUnfinished`, so a
+  // photo-only queue is also visible.
+  const { totalUnfinished } = useSyncStatus();
+  const badgeCount = totalUnfinished;
 
   return (
     <nav
@@ -42,12 +45,12 @@ export function TabBar() {
                     strokeWidth={active ? 2.4 : 2}
                     aria-hidden
                   />
-                  {href === "/submissions" && pendingCount > 0 && (
+                  {href === "/submissions" && badgeCount > 0 && (
                     <span
-                      aria-label={`${pendingCount} pending sync`}
+                      aria-label={`${badgeCount} pending sync`}
                       className="absolute -right-2 -top-1 inline-flex h-4 min-w-[1rem] items-center justify-center rounded-full bg-brand-warm px-1 text-[10px] font-semibold leading-none text-white"
                     >
-                      {pendingCount > 99 ? "99+" : pendingCount}
+                      {badgeCount > 99 ? "99+" : badgeCount}
                     </span>
                   )}
                 </span>

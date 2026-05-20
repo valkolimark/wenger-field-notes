@@ -44,6 +44,14 @@ Create `.env.local` in the project root. Variables required per cycle:
   summaries. On Vercel Prod/Preview (mark **Sensitive**); add to local
   `.env.local` manually (Sensitive ⇒ `vercel env pull` returns it blank).
   Server-only — never in client code.
+- **Cycle 13+ (active):** `BLOB_READ_WRITE_TOKEN` — Vercel Blob read-
+  write token, auto-created when the Blob store is provisioned via
+  the Vercel dashboard (Storage → Create → Blob) on Prod/Preview/Dev
+  (mark **Sensitive**). The store is configured **private**; uploads
+  go directly from the client via `@vercel/blob/client`, and reads
+  stream through a server-side proxy. Like the Neon vars,
+  `vercel env pull` returns it blank — copy from the dashboard into
+  `.env.local` for local development. Server-only.
 
 **First-time login:** allowlisted users sign in with their email and the
 bootstrap password (`Wenger2026!`). On first login they're forced to
@@ -65,16 +73,22 @@ deleting them (atomic). Admins can't change their own role or delete
 themselves. Gated by middleware **and** a server-side check on every
 admin route/page.
 
-**AI summaries (Cycle 8):** on `/admin` the Submissions tab has
-**Summarize pipeline** and **Per-rep summary** buttons — Claude
-(`claude-sonnet-4-5`) streams a structured plain-text analysis of the
-team's (or a rep's) logged visits into an inline panel (Regenerate /
-Close). Server-side input-token cap; summaries are on-demand only (not
-persisted). Requires `ANTHROPIC_API_KEY`.
+**AI summaries (Cycle 8; vision in Cycle 13):** on `/admin` the
+Submissions tab has **Summarize pipeline** and **Per-rep summary**
+buttons — Claude (`claude-sonnet-4-5`) streams a structured plain-text
+analysis of the team's (or a rep's) logged visits into an inline panel
+(Regenerate / Close). Each expandable submission row also has a
+**Deep analysis** button (visible when the visit has ≥1 photo) for a
+single-visit summary that references what's in the photos. All three
+summary scopes are vision-aware — Claude sees the attached photos as
+base64 image blocks alongside the form data. Server-side input-token
+cap (60k); over-cap falls back by dropping the oldest photos first.
+Summaries are on-demand only (not persisted). Requires
+`ANTHROPIC_API_KEY`.
 
 ### Tech stack
 
-Next.js 16 (App Router) · TypeScript · Tailwind CSS v4 · Leaflet + react-leaflet (OpenStreetMap tiles) · lucide-react · Neon Postgres · Drizzle ORM · NextAuth v5 · Anthropic SDK · Deployed on Vercel.
+Next.js 16 (App Router) · TypeScript · Tailwind CSS v4 · Leaflet + react-leaflet (OpenStreetMap tiles) · lucide-react · Neon Postgres · Drizzle ORM · NextAuth v5 · Anthropic SDK · Vercel Blob · IndexedDB (Dexie) · Service Worker (Serwist) · Deployed on Vercel.
 
 ### Data
 
@@ -122,8 +136,23 @@ admins **any** submission — Edit/Delete on the `/submissions` list and
 row (admin). Editing reuses the visit form, prefilled, at
 `/submissions/[id]/edit`; `PATCH` + `DELETE /api/submissions/[id]`
 enforce owner-or-admin server-side (an admin edit never reassigns the
-row's rep). Deletes go through the in-app confirm modal. Still no photo
-upload.
+row's rep). Deletes go through the in-app confirm modal.
+
+**Cycle 13 — photo attachments:** reps can attach up to 20 photos per
+visit (soft warning at 15). The form's Photos section uses the native
+camera (`<input capture="environment">`); each shot is compressed in a
+Web Worker (≤1600px long edge, JPEG q0.8, ~1MB) and queued in
+IndexedDB as a `LocalPhotoRow`. The two-phase sync engine drains
+submissions first, then photos; the photo upload uses
+`@vercel/blob/client.upload()` direct-to-Vercel-Blob via the
+`/api/photos/upload` `handleUpload` route. Photos are stored
+**private**; browser reads stream through `/api/photos/[id]/file`
+gated by the same owner-or-admin matrix as `/api/submissions/[id]`.
+Soft-delete via `deleted_at` (orphaned blob bytes reaped in a future
+cleanup pass). Photo retries cap at 5 attempts → terminal `failed`
+with a manual Retry button. The Submissions tab badge counts photos
+too, and the sync-status strip on `/submissions` reads
+"⏳ N pending sync · M photo(s) uploading" when both are active.
 
 ### Project conventions
 
@@ -177,6 +206,22 @@ server). A small numeric badge on the My Submissions tab shows the
 pending count from anywhere in the app. The map's California tiles
 (zoom 8–14) are cached too, so dead zones still show the map and
 school pins on the installed PWA.
+
+Cycle 13 added **photo attachments and vision-aware AI summaries**.
+The visit form gained a Photos section with native camera capture —
+tap **Add photo**, the phone camera opens, the thumbnail appears
+instantly with a captioning sheet. Photos persist locally through
+dead zones (status: Pending) and upload to Vercel Blob automatically
+when connectivity returns (status: Uploading → done; failures retry up
+to 5 times, then offer a manual Retry). Up to 20 photos per visit
+(soft warning at 15). The submission tab badge now counts photos too,
+so a photo-only queue is visible from any screen. Submission detail
+(rep + admin) renders a photo grid with a tap-to-zoom lightbox; the
+Vercel Blob store is private, so all reads stream through a server-
+side proxy gated by the existing owner-or-admin rules. AI summaries
+are now vision-aware: Pipeline and Per-rep summaries see every
+photographed detail; the new **Deep analysis** button on each admin
+row produces a per-visit summary that calls out what the photos show.
 
 ---
 
