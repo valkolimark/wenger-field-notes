@@ -268,6 +268,54 @@ self.addEventListener("install", (event) => {
   );
 });
 
+// --------------------------------------------------- client → SW prefetch
+// Once the client confirms the user is authenticated, it posts a list
+// of URLs (including a real /form/<sampleSchoolId>) to the SW. This
+// re-runs the prefetch with the auth cookie present, so the cached
+// responses are authed HTML / RSC payloads — not the login redirect
+// the install-time prefetch may have captured before login. The cached
+// /form/<sample> entry is what the offline /form/* prefix fallback
+// serves for any other school's URL (the resolver picks the right
+// school client-side from useParams).
+self.addEventListener("message", (event) => {
+  const data = event.data as { type?: string; urls?: string[] } | null;
+  if (
+    !data ||
+    data.type !== "PREFETCH" ||
+    !Array.isArray(data.urls)
+  ) {
+    return;
+  }
+  const urls: string[] = data.urls;
+  event.waitUntil(
+    (async () => {
+      try {
+        const pages = await self.caches.open(PAGES_CACHE);
+        const rsc = await self.caches.open(RSC_CACHE);
+        for (const url of urls) {
+          try {
+            const r = await fetch(url, { credentials: "include" });
+            if (r.ok || r.redirected) await pages.put(url, r.clone());
+          } catch {
+            /* best-effort */
+          }
+          try {
+            const r = await fetch(url, {
+              credentials: "include",
+              headers: { RSC: "1" },
+            });
+            if (r.ok) await rsc.put(url, r.clone());
+          } catch {
+            /* best-effort */
+          }
+        }
+      } catch {
+        /* best-effort */
+      }
+    })(),
+  );
+});
+
 // ----------------------------------------------------------------- init
 const serwist = new Serwist({
   precacheEntries: self.__SW_MANIFEST,
