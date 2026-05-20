@@ -170,15 +170,16 @@ const rscRoute: RuntimeCaching = {
     request.method === "GET" &&
     request.headers.get("RSC") === "1",
   handler: async ({ request }) => {
+    const cache = await self.caches.open(RSC_CACHE);
     try {
       const res = await fetch(request);
-      if (res.ok) {
-        const cache = await self.caches.open(RSC_CACHE);
-        void cache.put(request, res.clone());
-      }
+      if (res.ok) void cache.put(request, res.clone());
       return res;
     } catch {
-      const cached = await self.caches.match(request, {
+      // Search ONLY the RSC cache — a global caches.match would happily
+      // return an HTML entry from PAGES_CACHE and feed it to Next's
+      // router as an "RSC" payload, which then breaks the next nav.
+      const cached = await cache.match(request, {
         ignoreVary: true,
         ignoreSearch: true,
       });
@@ -202,15 +203,16 @@ const navRoute: RuntimeCaching = {
     request.mode === "navigate" &&
     url.origin === self.location.origin,
   handler: async ({ request }) => {
+    const pages = await self.caches.open(PAGES_CACHE);
     try {
       const res = await fetch(request);
-      if (res.ok) {
-        const cache = await self.caches.open(PAGES_CACHE);
-        void cache.put(request, res.clone());
-      }
+      if (res.ok) void pages.put(request, res.clone());
       return res;
     } catch {
-      const cached = await self.caches.match(request, {
+      // Search ONLY the PAGES cache. A global caches.match would happily
+      // return an RSC (text/x-component) entry from RSC_CACHE for the
+      // same URL — Safari renders that as plain text on screen.
+      const cached = await pages.match(request, {
         ignoreVary: true,
         ignoreSearch: true,
       });
@@ -219,11 +221,11 @@ const navRoute: RuntimeCaching = {
       const aliased = await fallbackByPrefix(PAGES_CACHE, url, "/form/");
       if (aliased) return aliased;
       const root =
-        (await self.caches.match("/map", {
+        (await pages.match("/map", {
           ignoreVary: true,
           ignoreSearch: true,
         })) ??
-        (await self.caches.match("/", {
+        (await pages.match("/", {
           ignoreVary: true,
           ignoreSearch: true,
         }));
