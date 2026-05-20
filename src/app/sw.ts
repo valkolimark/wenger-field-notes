@@ -96,18 +96,38 @@ const osmTilesRoute: RuntimeCaching = {
 };
 
 // ----------------------------------------------------------------- auth
-// NextAuth client periodically pings /api/auth/session and may redirect
-// to /api/auth/error on failure. Offline, those throw inside the SW and
-// surface as "FetchEvent.respondWith received an error: no-response".
-// Always return a real Response so respondWith never rejects.
+// NextAuth client fetches /api/auth/session on every page mount to
+// drive useSession(). Offline that fetch fails, useSession() returns
+// no session, and any client code that reads session.user.repId
+// (e.g. the visit form's save handler) sees an empty string and
+// silently no-ops.
+//
+// Fix: cache successful /api/auth/session responses online and serve
+// them from cache offline. Other /api/auth/* requests still get a
+// synthetic 503 on failure so respondWith never rejects (no more
+// "FetchEvent.respondWith received an error: no-response" Safari page).
+const AUTH_CACHE = "auth-session-v1";
 const authRoute: RuntimeCaching = {
   matcher: ({ url }) =>
     url.origin === self.location.origin &&
     url.pathname.startsWith("/api/auth"),
   handler: async ({ request }) => {
+    const isSession =
+      new URL(request.url).pathname === "/api/auth/session";
     try {
-      return await fetch(request);
+      const res = await fetch(request);
+      if (isSession && res.ok) {
+        const cache = await self.caches.open(AUTH_CACHE);
+        void cache.put(request, res.clone());
+      }
+      return res;
     } catch {
+      if (isSession) {
+        const cached = await self.caches.match(request, {
+          ignoreVary: true,
+        });
+        if (cached) return cached;
+      }
       return new Response(JSON.stringify({ error: "offline" }), {
         status: 503,
         headers: { "content-type": "application/json" },

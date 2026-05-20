@@ -199,7 +199,16 @@ export function VisitForm({
       });
       return;
     }
-    if (!repId || saving) return;
+    if (saving) return;
+    if (!repId) {
+      // Cycle 12: surface (don't silently swallow) the case where the
+      // session hasn't loaded — e.g. /api/auth/session failed offline
+      // before the SW had a cached copy.
+      setSaveError(
+        "Couldn't read your session — open the app online once and try again.",
+      );
+      return;
+    }
     setSaveError(null);
     setSaving(true);
 
