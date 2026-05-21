@@ -36,7 +36,9 @@ export function useSubmissions() {
         Array.isArray(data.submissions) ? data.submissions : [],
       );
     } catch {
-      setError("Couldn't load submissions — pull to refresh.");
+      setError(
+        "Couldn't load submissions — pull to refresh. Make sure you're online and have signal.",
+      );
     } finally {
       setLoading(false);
     }

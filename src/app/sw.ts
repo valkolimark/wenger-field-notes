@@ -142,23 +142,61 @@ const authRoute: RuntimeCaching = {
   },
 };
 
-// ----------------------------------------------- /form/* prefix fallback
-// /form/[schoolId] renders identical HTML for every school (the school
-// is resolved client-side from useParams + the static list), so any
-// cached /form/* response can satisfy any other school's URL offline.
-// Used by both the RSC and navigation handlers below.
-async function fallbackByPrefix(
+// ------------------------------------------------- pattern-fallback helper
+// Several dynamic routes render identical server HTML across all ids
+// (the page chunk reads useParams() client-side and loads the right
+// row), so a single cached entry can satisfy every URL matching the
+// same pattern offline. Cycle 12 introduced this for /form/[schoolId];
+// Cycle 16 extends it to /submissions/[id] (detail) and
+// /submissions/[id]/edit (edit) so reps can view + edit pending visits
+// offline without bouncing to /map.
+//
+// The matcher accepts a pathname and returns true if it qualifies for
+// this pattern. We require both the REQUESTED URL and the cached KEY
+// to satisfy the matcher — otherwise a /form/* request might pick up
+// a cached /submissions/<id> entry and serve the wrong page.
+type PathMatcher = (path: string) => boolean;
+
+async function fallbackByMatcher(
   cacheName: string,
   url: URL,
-  prefix: string,
+  matcher: PathMatcher,
 ): Promise<Response | undefined> {
-  if (!url.pathname.startsWith(prefix)) return undefined;
+  if (!matcher(url.pathname)) return undefined;
   const cache = await self.caches.open(cacheName);
   for (const key of await cache.keys()) {
-    if (new URL(key.url).pathname.startsWith(prefix)) {
+    if (matcher(new URL(key.url).pathname)) {
       const hit = await cache.match(key);
       if (hit) return hit;
     }
+  }
+  return undefined;
+}
+
+const IS_FORM_PATH: PathMatcher = (p) => p.startsWith("/form/");
+// /submissions/<id> — must have something after /submissions/, and must
+// NOT end in /edit (those go to the edit matcher).
+const IS_SUBMISSION_DETAIL_PATH: PathMatcher = (p) =>
+  /^\/submissions\/[^/]+$/.test(p);
+// /submissions/<id>/edit
+const IS_SUBMISSION_EDIT_PATH: PathMatcher = (p) =>
+  /^\/submissions\/[^/]+\/edit$/.test(p);
+
+// In-order fallback chain: each request runs through these in turn,
+// the first one that matches AND finds a cached entry wins.
+const FALLBACK_MATCHERS: PathMatcher[] = [
+  IS_SUBMISSION_EDIT_PATH, // more specific than detail; check first
+  IS_SUBMISSION_DETAIL_PATH,
+  IS_FORM_PATH,
+];
+
+async function fallbackByAnyMatcher(
+  cacheName: string,
+  url: URL,
+): Promise<Response | undefined> {
+  for (const matcher of FALLBACK_MATCHERS) {
+    const hit = await fallbackByMatcher(cacheName, url, matcher);
+    if (hit) return hit;
   }
   return undefined;
 }
@@ -169,12 +207,11 @@ async function fallbackByPrefix(
 // offline fall back to exact-match → /form/* prefix → synthetic 504
 // so the router can surface a normal error instead of the SW crashing
 // the navigation.
-// Cycle 14: bumped v2 → v3 to abandon cached RSC payloads that
-// referenced the pre-May-2026 school dataset.
-// Cycle 15: bumped v3 → v4 so existing devices re-run the install
-// handler (which now also seeds a /form/<sample> entry, closing the
-// offline-form regression).
-const RSC_CACHE = "next-rsc-v4";
+// Cycle 14 v2→v3; Cycle 15 v3→v4; Cycle 16 v4→v5 so existing devices
+// re-run install with the new prefetch list (adds /submissions/__prefetch__
+// and /submissions/__prefetch__/edit) AND the redirect-skip behavior
+// that prevents login-page HTML from poisoning authed-route cache keys.
+const RSC_CACHE = "next-rsc-v5";
 const rscRoute: RuntimeCaching = {
   matcher: ({ request, url }) =>
     url.origin === self.location.origin &&
@@ -196,7 +233,7 @@ const rscRoute: RuntimeCaching = {
       });
       if (cached) return cached;
       const url = new URL(request.url);
-      const aliased = await fallbackByPrefix(RSC_CACHE, url, "/form/");
+      const aliased = await fallbackByAnyMatcher(RSC_CACHE, url);
       if (aliased) return aliased;
       return new Response("", { status: 504 });
     }
@@ -208,13 +245,10 @@ const rscRoute: RuntimeCaching = {
 // Offline → exact-match → /form/* prefix → cached "/" → navy offline
 // stub. Never throw (the iOS PWA "FetchEvent.respondWith received an
 // error" we hit on the first round was this path rejecting).
-// Cycle 14: bumped v2 → v3 alongside RSC.
-// Cycle 15: bumped v3 → v4 alongside RSC so existing devices re-run
-// the install handler. The install handler now seeds a
-// /form/<schools[0].id> entry too — without that, the navRoute's
-// /form/* prefix fallback would miss after a fresh install and fall
-// all the way through to cached /map (the Cycle 14 regression).
-const PAGES_CACHE = "pages-v4";
+// Cycle 14 v2→v3; Cycle 15 v3→v4; Cycle 16 v4→v5 (paired with RSC bump
+// above so existing devices re-run install and abandon any login-page-
+// poisoned entries from before the redirect-skip fix).
+const PAGES_CACHE = "pages-v5";
 const navRoute: RuntimeCaching = {
   matcher: ({ request, url }) =>
     request.mode === "navigate" &&
@@ -235,7 +269,7 @@ const navRoute: RuntimeCaching = {
       });
       if (cached) return cached;
       const url = new URL(request.url);
-      const aliased = await fallbackByPrefix(PAGES_CACHE, url, "/form/");
+      const aliased = await fallbackByAnyMatcher(PAGES_CACHE, url);
       if (aliased) return aliased;
       const root =
         (await pages.match("/map", {
@@ -269,22 +303,30 @@ const navRoute: RuntimeCaching = {
 // at SW install so they're populated regardless of who controlled the
 // first nav. SW fetches inherit the client's cookies, so an already-
 // authed user gets authed HTML cached here.
-// Cycle 15: `/form/${schools[0].id}` joins the install-time prefetch.
-// /form/[schoolId] HTML is identical for every school (the resolver
-// reads useParams() client-side), so caching ONE form URL satisfies
-// the navRoute's /form/* prefix fallback for every other school. This
-// happens at SW install — independent of the post-auth client→SW
-// prefetch — so an offline rep tapping Start visit always lands on
-// the form, even on a fresh SW install.
+// Cycle 15: `/form/${schools[0].id}` joins the install-time prefetch
+// (one cached form URL satisfies the /form/* prefix fallback for every
+// other school).
+// Cycle 16: same trick for /submissions/[id] and /submissions/[id]/edit
+// using `__prefetch__` as a placeholder id. The route renders identical
+// server HTML regardless of id (the client component reads useParams()
+// and loads the row from the API or Dexie), so these template entries
+// satisfy the navRoute fallback for every real submission id offline.
+// This is what makes "Edit a pending visit offline" work — without it,
+// /submissions/<realId>/edit fell through to cached /map (the
+// "couldn't edit my entry offline" complaint).
 const SAMPLE_FORM_PATH = schools[0]
   ? `/form/${schools[0].id}`
   : "/form/sample";
+const SAMPLE_SUBMISSION_DETAIL_PATH = "/submissions/__prefetch__";
+const SAMPLE_SUBMISSION_EDIT_PATH = "/submissions/__prefetch__/edit";
 const PREFETCH_NAV = [
   "/map",
   "/submissions",
   "/",
   "/account",
   SAMPLE_FORM_PATH,
+  SAMPLE_SUBMISSION_DETAIL_PATH,
+  SAMPLE_SUBMISSION_EDIT_PATH,
 ];
 
 self.addEventListener("install", (event) => {
@@ -297,7 +339,16 @@ self.addEventListener("install", (event) => {
           PREFETCH_NAV.map(async (path) => {
             try {
               const res = await fetch(path, { credentials: "include" });
-              if (res.ok || res.redirected) {
+              // Cycle 16: do NOT cache redirected responses. If the
+              // install handler fires before the user logs in (or
+              // before the auth cookie reaches the SW), middleware
+              // redirects authed-only routes to "/" and the response
+              // arrives as the LOGIN page HTML under the original
+              // URL — poisoning the cache for /form/<id>,
+              // /submissions/<id>, etc. PrefetchOfflineRoutes
+              // re-fetches after auth with credentials, so the
+              // correct authed HTML lands then.
+              if (res.ok && !res.redirected) {
                 await pages.put(path, res.clone());
               }
             } catch {
@@ -308,7 +359,7 @@ self.addEventListener("install", (event) => {
                 credentials: "include",
                 headers: { RSC: "1" },
               });
-              if (rscRes.ok) {
+              if (rscRes.ok && !rscRes.redirected) {
                 await rsc.put(path, rscRes.clone());
               }
             } catch {
@@ -350,7 +401,11 @@ self.addEventListener("message", (event) => {
         for (const url of urls) {
           try {
             const r = await fetch(url, { credentials: "include" });
-            if (r.ok || r.redirected) await pages.put(url, r.clone());
+            // Same redirect-skip as the install handler (Cycle 16);
+            // a redirect on this code path means auth lapsed between
+            // the message and the fetch, and the cache would be
+            // poisoned with login HTML.
+            if (r.ok && !r.redirected) await pages.put(url, r.clone());
           } catch {
             /* best-effort */
           }
@@ -359,7 +414,7 @@ self.addEventListener("message", (event) => {
               credentials: "include",
               headers: { RSC: "1" },
             });
-            if (r.ok) await rsc.put(url, r.clone());
+            if (r.ok && !r.redirected) await rsc.put(url, r.clone());
           } catch {
             /* best-effort */
           }

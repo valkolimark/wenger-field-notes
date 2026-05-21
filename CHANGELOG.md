@@ -6,6 +6,91 @@ Format: `## Cycle N — Title (YYYY-MM-DD)` followed by a short prose summary, t
 
 ---
 
+## Cycle 16 — Offline route coverage extension (2026-05-21)
+
+Field feedback after Cycle 15:
+1. **"Couldn't load submissions — pull to refresh."** — too cryptic;
+   reps didn't know it was a connectivity warning, not a server bug.
+2. **"I had to go to the form while online before it showed up."** —
+   the Cycle 15 install-time `/form/<sample>` prefetch wasn't enough
+   on its own.
+3. **"I was not able to edit my entry offline."** — same Cycle 14
+   regression manifesting for a different route: `/submissions/<id>/edit`
+   isn't precached and has no SW prefix fallback, so it fell through to
+   cached `/map`.
+4. Overall ask: "I need the PWA to completely pull down all pages to
+   work properly offline."
+
+**Root cause for (2):** the SW install handler used
+`if (res.ok || res.redirected) cache.put(...)`. If install fired
+before the auth cookie reached the SW, middleware redirected
+authed-only routes to `/` and the install handler cached the LOGIN
+page HTML under the original URL — including `/form/<sample>`,
+`/map`, `/submissions`, `/account`. Subsequent offline navs to any
+of those URLs served the login page HTML. The `PrefetchOfflineRoutes`
+post-auth re-fetch overwrote them, but only after the rep navigated
+somewhere that triggered it. Reps who tapped Start visit before that
+re-fetch landed got the login HTML instead of the form, which
+browsers render as `/` (the school list felt like a "bounce back").
+
+**Root cause for (3):** Cycle 12's `/form/*` prefix-fallback machinery
+in the SW navRoute only matches `/form/*` URLs. `/submissions/[id]`
+and `/submissions/[id]/edit` are dynamic routes with identical
+server-rendered HTML across all ids (same trick as `/form`), but
+they were never prefetched and the navRoute had no fallback
+matcher for them. Offline tap-Edit hit the navRoute, missed
+everywhere, and fell through to cached `/map`.
+
+**Fixes**
+
+- `<UseSubmissions>` server-fetch error string extended:
+  `"Couldn't load submissions — pull to refresh. Make sure you're
+  online and have signal."`
+- `src/app/sw.ts` install handler: `if (res.ok && !res.redirected)`
+  for both pages-cache and rsc-cache puts. Same guard added to the
+  `message` (post-auth client→SW) handler. Stops login-page HTML
+  from poisoning authed-route cache keys.
+- `PREFETCH_NAV` extended with two placeholder URLs:
+  `/submissions/__prefetch__` (detail template) and
+  `/submissions/__prefetch__/edit` (edit template). The server
+  renders identical HTML for any id (the client component reads
+  useParams() and loads the row from the API or Dexie), so these
+  single entries satisfy the SW nav fallback for every real id
+  offline.
+- `<PrefetchOfflineRoutes>` (post-auth client→SW PREFETCH message)
+  list extended with the same two URLs — the install pass IS the
+  primary seed, but the client pass overwrites with fresher
+  authed HTML on every shell mount.
+- New SW helper `fallbackByMatcher(cacheName, url, matcher)`
+  generalizes the old `fallbackByPrefix` to accept a predicate.
+  Three matchers shipped: `IS_FORM_PATH` (existing /form/*),
+  `IS_SUBMISSION_EDIT_PATH` (`/^\/submissions\/[^/]+\/edit$/`,
+  checked first because it's more specific), and
+  `IS_SUBMISSION_DETAIL_PATH` (`/^\/submissions\/[^/]+$/`).
+  navRoute + rscRoute both call `fallbackByAnyMatcher(...)` which
+  walks the chain in order; each matcher requires BOTH the
+  requested URL and the cached key to satisfy it (so a
+  /form/<id> request can never accidentally pick up a cached
+  /submissions/<id> entry).
+- Cache versions bumped: `pages-v4 → pages-v5`, `next-rsc-v4 →
+  next-rsc-v5`. Forces existing devices to re-run the install
+  handler with the new prefetch list + redirect-skip behavior, and
+  abandons any login-page-poisoned entries from before the fix.
+
+**Notes / verification**
+- Zero new dependencies, zero env vars, zero schema migrations.
+- `npm run build` clean (27 routes, unchanged). `tsc --noEmit`
+  clean. Built `public/sw.js` carries `pages-v5`, `next-rsc-v5`,
+  `submissions/__prefetch__`, and `submissions/__prefetch__/edit`
+  — verified inline.
+- **Team's portion of the live check (iOS PWA):** open online for
+  ~15s (let the v5 SW install + prefetch complete). Force-quit,
+  airplane mode, reopen. Tap any pin → form should open immediately,
+  no prior online form visit required. On `/submissions`, tap a
+  pending row → detail opens. Tap Edit → edit page opens. None of
+  these should bounce to `/map` anymore.
+- Live: https://valkolimark-wenger-field-notes.vercel.app
+
 ## Cycle 15 — Map view restored + offline form prefetch fix (2026-05-21)
 
 Two slices in one cycle (user-approved at the gate):

@@ -29,11 +29,19 @@ export function PrefetchOfflineRoutes() {
       try {
         const reg = await navigator.serviceWorker.ready;
         const sample = schools[0]?.id;
+        // Cycle 16: include /submissions template URLs so a rep can
+        // open + edit a pending visit offline without first visiting
+        // those pages online. Both routes render identical server HTML
+        // regardless of id (the client component reads useParams() and
+        // loads the row from API or Dexie), so one cached entry per
+        // pattern satisfies the SW's nav fallback for any real id.
         const urls = [
           "/map",
           "/submissions",
           "/account",
           ...(sample ? [`/form/${sample}`] : []),
+          "/submissions/__prefetch__",
+          "/submissions/__prefetch__/edit",
         ];
         const sw =
           reg.active ?? reg.waiting ?? reg.installing;
