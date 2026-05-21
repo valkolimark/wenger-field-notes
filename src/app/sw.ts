@@ -30,6 +30,12 @@ import {
   Serwist,
   StaleWhileRevalidate,
 } from "serwist";
+// Cycle 15: SW bundles the static schools dataset so the install
+// handler can prefetch `/form/${schools[0].id}` directly — closing
+// the Cycle 14 regression where the form URL was only cached by the
+// async post-auth client→SW prefetch (and missing it left the nav
+// fallback chain serving cached /map for any /form/<id> tap).
+import { schools } from "@/lib/schools";
 
 declare global {
   interface WorkerGlobalScope extends SerwistGlobalConfig {
@@ -164,10 +170,11 @@ async function fallbackByPrefix(
 // so the router can surface a normal error instead of the SW crashing
 // the navigation.
 // Cycle 14: bumped v2 → v3 to abandon cached RSC payloads that
-// referenced the pre-May-2026 school dataset (~47 entries with old ids
-// + lat/lng). New SW starts with an empty next-rsc-v3 and re-populates
-// it via the post-auth prefetch.
-const RSC_CACHE = "next-rsc-v3";
+// referenced the pre-May-2026 school dataset.
+// Cycle 15: bumped v3 → v4 so existing devices re-run the install
+// handler (which now also seeds a /form/<sample> entry, closing the
+// offline-form regression).
+const RSC_CACHE = "next-rsc-v4";
 const rscRoute: RuntimeCaching = {
   matcher: ({ request, url }) =>
     url.origin === self.location.origin &&
@@ -201,10 +208,13 @@ const rscRoute: RuntimeCaching = {
 // Offline → exact-match → /form/* prefix → cached "/" → navy offline
 // stub. Never throw (the iOS PWA "FetchEvent.respondWith received an
 // error" we hit on the first round was this path rejecting).
-// Cycle 14: bumped v2 → v3 alongside RSC. Cached /form/<id> HTML for
-// removed schools (Harvard-Westlake, Loyola, etc.) is no longer
-// useful; the post-auth prefetch repopulates with current schools[0].
-const PAGES_CACHE = "pages-v3";
+// Cycle 14: bumped v2 → v3 alongside RSC.
+// Cycle 15: bumped v3 → v4 alongside RSC so existing devices re-run
+// the install handler. The install handler now seeds a
+// /form/<schools[0].id> entry too — without that, the navRoute's
+// /form/* prefix fallback would miss after a fresh install and fall
+// all the way through to cached /map (the Cycle 14 regression).
+const PAGES_CACHE = "pages-v4";
 const navRoute: RuntimeCaching = {
   matcher: ({ request, url }) =>
     request.mode === "navigate" &&
@@ -259,7 +269,23 @@ const navRoute: RuntimeCaching = {
 // at SW install so they're populated regardless of who controlled the
 // first nav. SW fetches inherit the client's cookies, so an already-
 // authed user gets authed HTML cached here.
-const PREFETCH_NAV = ["/map", "/submissions", "/", "/account"];
+// Cycle 15: `/form/${schools[0].id}` joins the install-time prefetch.
+// /form/[schoolId] HTML is identical for every school (the resolver
+// reads useParams() client-side), so caching ONE form URL satisfies
+// the navRoute's /form/* prefix fallback for every other school. This
+// happens at SW install — independent of the post-auth client→SW
+// prefetch — so an offline rep tapping Start visit always lands on
+// the form, even on a fresh SW install.
+const SAMPLE_FORM_PATH = schools[0]
+  ? `/form/${schools[0].id}`
+  : "/form/sample";
+const PREFETCH_NAV = [
+  "/map",
+  "/submissions",
+  "/",
+  "/account",
+  SAMPLE_FORM_PATH,
+];
 
 self.addEventListener("install", (event) => {
   event.waitUntil(

@@ -6,6 +6,81 @@ Format: `## Cycle N — Title (YYYY-MM-DD)` followed by a short prose summary, t
 
 ---
 
+## Cycle 15 — Map view restored + offline form prefetch fix (2026-05-21)
+
+Two slices in one cycle (user-approved at the gate):
+
+1. **Map view restored.** Hand-derived `lat`/`lng` for all 39 schools
+   from their `location` strings (LA-area knowledge; same Cycle 3
+   pattern). Recreated `<SchoolMap>` (Leaflet pins + navy divIcon +
+   OSM tiles, deleted in Cycle 14). `<MapScreen>` now renders the
+   map by default and gains a Map/List toggle so reps can switch to
+   the Cycle-14 tier-grouped list when scanning by name is faster.
+   The Cycle 14 "Coordinates pending" banner is gone.
+
+2. **Offline form regression fixed.** Cycle 14's cache version bump
+   emptied `pages-v3`, but the SW install handler's `PREFETCH_NAV`
+   never included a `/form/<id>` URL — only the async post-auth
+   client→SW prefetch did. If a rep went offline before that prefetch
+   completed, the navRoute's `/form/*` prefix fallback would miss
+   and fall all the way through to cached `/map`, sending the rep
+   back to the school list instead of the form (matches the
+   reported symptom exactly).
+
+**GATE decisions (approved):**
+- **Map + List toggle** rather than map-only or map-with-list-below.
+  Default = map; small Map/List pills in a toolbar row beneath the
+  search bar.
+- **Commit best-guess coordinates with `// TODO: verify coords` on
+  the ambiguous ones; user spot-checks live.** Same pattern Cycle 3
+  used. 5 entries flagged: Oakwood (Secondary/Elementary multi-
+  campus), Wildwood (same), Sequoyah (K-8/HS split), Le Lycée
+  Français (distributed campuses), Turning Point (location string
+  says Culver City but Sylvan St address resolves to Van Nuys —
+  pinned at the literal address).
+
+**Added**
+- `lat: number` + `lng: number` (required) on the `School` interface;
+  39 coordinates populated in `src/lib/schools.ts`.
+- `src/components/map/school-map.tsx` (restored) — Leaflet
+  MapContainer + custom navy divIcon pin + InvalidateOnReady, same
+  shape as the Cycle 3 file deleted in Cycle 14.
+- Map/List toggle (compact 2-button pill row) in `<MapScreen>`,
+  rendered between the SearchFilter and the view area.
+
+**Changed**
+- `<MapScreen>` — dynamic-import `<SchoolMap>` (ssr:false because
+  Leaflet touches `window`); render map OR list based on the toggle.
+  Preview overlay sits as a sibling of the view area, inside the
+  outer `fixed` container, so it pins to the visible viewport in
+  both views.
+- `<EditSubmission>` — fallback `School` literal (used when the
+  schoolId no longer matches any current row) gains `lat`/`lng`
+  defaults at LA-area centroid so the type stays satisfied.
+- `src/app/sw.ts`:
+  - Imports `schools` (bundled into the worker; +~30KB sw.js).
+  - `PREFETCH_NAV` extended with `\`/form/\${schools[0].id}\`` —
+    `/form/[schoolId]` HTML is identical for every school (the
+    resolver reads useParams() client-side), so caching ONE form URL
+    satisfies the navRoute's `/form/*` prefix fallback for every
+    other school.
+  - `PAGES_CACHE` bumped v3 → v4 and `RSC_CACHE` v3 → v4 so existing
+    devices re-run the install handler (which now seeds the form URL).
+
+**Notes / verification**
+- Zero new dependencies (`leaflet` + `react-leaflet` were retained
+  in package.json across Cycle 14 for exactly this restoration).
+  Zero new env vars, zero schema migrations.
+- `npm run build` clean (27 routes, unchanged). `tsc --noEmit` clean.
+  Public `public/sw.js` carries `pages-v4`, `next-rsc-v4`, and the
+  bundled `schools[0].id` (`brentwood-school-east-campus-6-12`)
+  resolved at SW install time. SW bundle grew ~40KB → ~71KB.
+- **Coordinate spot-check is the team's portion of the live check.**
+  Drop into `/map`, see the 39 pins, tell me which (if any) are
+  noticeably off — I correct in a follow-up. The 5 `// TODO: verify
+  coords` entries are the most likely candidates.
+- Live: https://valkolimark-wenger-field-notes.vercel.app
+
 ## Cycle 14 — School dataset swap to Brooke's May-2026 planning sheet (2026-05-21)
 
 Replaced the entire school dataset with the authoritative California

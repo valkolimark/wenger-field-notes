@@ -2,6 +2,12 @@
 // AUTO-GENERATED from California_Planning.xlsx (Brooke, May 2026).
 // 39 schools across 4 tiers. Source of truth for the school dataset.
 // Do not hand-edit individual records here; regenerate from the spreadsheet.
+//
+// Coordinates (Cycle 15) are STATIC, hand-derived from the source addresses
+// using LA-area geography knowledge — no runtime geocoding. Entries whose
+// address is ambiguous (multi-campus, distributed sites, or address/city
+// mismatch) use a best-guess single point and are marked
+// `// TODO: verify coords` for the team to spot-check on the live map.
 
 export interface SchoolContact {
   role: string;
@@ -18,6 +24,9 @@ export interface School {
   contacts: SchoolContact[];
   /** Historical order/territory notes from the planning sheet — shown to reps when prepping for a visit. */
   notes: string;
+  /** Cycle 15: hand-derived lat/lng for the pin map. Required. */
+  lat: number;
+  lng: number;
 }
 
 export const SCHOOL_TIERS = [
@@ -42,6 +51,8 @@ export const schools: School[] = [
       { role: "Athletic Director", name: "Dana Vasquez" },
     ],
     notes: "July-Sept 2025, Jan 2026 - no potential",
+    lat: 34.0533,
+    lng: -118.4717,
   },
   {
     id: "flintridge-preparatory-school",
@@ -56,6 +67,8 @@ export const schools: School[] = [
       { role: "Athletic Director", name: "Sean Beattie" },
     ],
     notes: "2021 - Auditorium Expansion - no potential\n2024 - StageTek Audience Seating - no potential",
+    lat: 34.2056,
+    lng: -118.1986,
   },
   {
     id: "sierra-canyon-school",
@@ -70,6 +83,8 @@ export const schools: School[] = [
       { role: "Associate Head AD", name: "Katie Fox" },
     ],
     notes: "2022 - flipFORMS",
+    lat: 34.2787,
+    lng: -118.6020,
   },
   {
     id: "crossroads-school",
@@ -80,6 +95,8 @@ export const schools: School[] = [
     projectActivity: "Active construction: 55,000 SF Performing Arts Center (~2026)",
     contacts: [],
     notes: "Tam is working on this with architect. She should visit.\n\nWorking with Project Architect, Shuba Krishnaswamy (SPF Architects) on Music Furnishings. https://www.spfa.com/work/crossroads-main-stage-auditorium-building",
+    lat: 34.0263,
+    lng: -118.4881,
   },
   {
     id: "windward-school",
@@ -97,6 +114,8 @@ export const schools: School[] = [
       { role: "Director of Theatre and Dance", name: "Jordan Fox" },
     ],
     notes: "2023 - Jeff Kirkpatrick working with Turner Construction",
+    lat: 34.0103,
+    lng: -118.4197,
   },
   {
     id: "campbell-hall-school",
@@ -113,6 +132,8 @@ export const schools: School[] = [
       { role: "High School Performing Arts, Chapel Band, Choir", name: "Jeff Bonhiver" },
     ],
     notes: "2023 - Classic 50 stands",
+    lat: 34.1571,
+    lng: -118.4002,
   },
   {
     id: "viewpoint-school",
@@ -126,6 +147,8 @@ export const schools: School[] = [
       { role: "Instrumental Music", name: "Nick Alvarez, Kimberly Gonzalez, Marisa Mcleod" },
     ],
     notes: "2025 - Student chairs, carts, decks, podium purchase",
+    lat: 34.1431,
+    lng: -118.6418,
   },
   {
     id: "the-webb-schools",
@@ -140,6 +163,8 @@ export const schools: School[] = [
       { role: "Associate Director of Athletics", name: "Danielle Wilson" },
     ],
     notes: "This is Jeremy DuBoi's territory (909 territory)",
+    lat: 34.1297,
+    lng: -117.7196,
   },
   {
     id: "oaks-christian-school",
@@ -156,6 +181,8 @@ export const schools: School[] = [
       { role: "Fine Arts Teachers", name: "Eddie Grey, Joe Diblasi, Alicia Langness" },
     ],
     notes: "2026 - SoundLok Gasketing",
+    lat: 34.1648,
+    lng: -118.7864,
   },
   {
     id: "marymount-high-school",
@@ -171,6 +198,8 @@ export const schools: School[] = [
       { role: "Director of Finance & Operations", name: "Lori Paillet" },
     ],
     notes: "2019 - Last Order 2014, Folio Cabinet",
+    lat: 34.0750,
+    lng: -118.4754,
   },
   {
     id: "westridge-school",
@@ -187,6 +216,8 @@ export const schools: School[] = [
       { role: "Music", name: "Rachel Counihan" },
     ],
     notes: "2025 - Tourmaster additions, replacement parts",
+    lat: 34.1377,
+    lng: -118.1542,
   },
   {
     id: "archer-school-for-girls",
@@ -201,6 +232,8 @@ export const schools: School[] = [
       { role: "Director of Athletics", name: "Kim Smith" },
     ],
     notes: "1999-2018 - Total sales $8K",
+    lat: 34.0680,
+    lng: -118.4836,
   },
   {
     id: "oakwood-school",
@@ -214,6 +247,9 @@ export const schools: School[] = [
       { role: "Chief Operating Officer", name: "Christopher Thomas" },
     ],
     notes: "2022 (Secondary) - Classic 50 Stands\n2013 (Elementary) - flipFORMS",
+    // TODO: verify coords — multi-campus (Secondary used; Elementary at ~34.1480, -118.3812)
+    lat: 34.1631,
+    lng: -118.3946,
   },
   {
     id: "wildwood-school",
@@ -229,6 +265,9 @@ export const schools: School[] = [
       { role: "Assistant Athletic Director", name: "Reo Sorrentino" },
     ],
     notes: "2021 (Secondary) - no orders, quote for stand & move cart\n2007 (Elementary) - music stands, lights, tall folio cabinets",
+    // TODO: verify coords — multi-campus (Secondary used; Elementary at ~34.0188, -118.4231)
+    lat: 34.0291,
+    lng: -118.4317,
   },
   {
     id: "new-roads-school",
@@ -242,6 +281,8 @@ export const schools: School[] = [
       { role: "Director of Music", name: "Stephen Billington" },
     ],
     notes: "2023 - Theatre inspection (there are three separate schools under this umbrella)",
+    lat: 34.0263,
+    lng: -118.4738,
   },
   {
     id: "pilgrim-school",
@@ -256,6 +297,8 @@ export const schools: School[] = [
       { role: "Athletic Director", name: "Sam Taub" },
     ],
     notes: "1994 - footnotes rug",
+    lat: 34.0735,
+    lng: -118.2829,
   },
   {
     id: "rolling-hills-prep",
@@ -269,6 +312,8 @@ export const schools: School[] = [
       { role: "Athletic Coordinator", name: "Lance Hollandsworth" },
     ],
     notes: "2019 - drape quote",
+    lat: 33.7494,
+    lng: -118.3043,
   },
   {
     id: "sequoyah-school",
@@ -283,6 +328,9 @@ export const schools: School[] = [
       { role: "Director of Athletics", name: "Brian Knigin" },
     ],
     notes: "no activity or quotes",
+    // TODO: verify coords — multi-campus (K-8 used; HS at ~34.1505, -118.1492)
+    lat: 34.1450,
+    lng: -118.1521,
   },
   {
     id: "st-john-bosco-hs",
@@ -300,6 +348,8 @@ export const schools: School[] = [
       { role: "Activities Director", name: "Donminic Ellison" },
     ],
     notes: "2009 - mobile kiosk",
+    lat: 33.8767,
+    lng: -118.1170,
   },
   {
     id: "notre-dame-hs-sherman-oaks",
@@ -318,6 +368,8 @@ export const schools: School[] = [
       { role: "Assistant Athletics", name: "Gregory Moss" },
     ],
     notes: "2018 - preface conductor's stand",
+    lat: 34.1564,
+    lng: -118.4326,
   },
   {
     id: "bishop-montgomery-hs",
@@ -333,6 +385,8 @@ export const schools: School[] = [
       { role: "Assistant Athletic Director", name: "Oscar McBride" },
     ],
     notes: "1998- chairs & tablet arms",
+    lat: 33.8267,
+    lng: -118.3531,
   },
   {
     id: "alemany-hs",
@@ -349,6 +403,8 @@ export const schools: School[] = [
       { role: "Football Coach", name: "Dennis Keyes" },
     ],
     notes: "2007 - x carts",
+    lat: 34.2683,
+    lng: -118.4622,
   },
   {
     id: "chaminade-college-prep",
@@ -363,6 +419,8 @@ export const schools: School[] = [
       { role: "Fine Arts Department Chair", name: "Yvette Bishop" },
     ],
     notes: "2024 - signature risers",
+    lat: 34.1981,
+    lng: -118.6371,
   },
   {
     id: "louisville-hs",
@@ -378,6 +436,8 @@ export const schools: School[] = [
       { role: "Performing Arts Faculty", name: "Dan Mailley, Connor Smith" },
     ],
     notes: "1989 - choral folios",
+    lat: 34.1339,
+    lng: -118.6132,
   },
   {
     id: "fairmont-prep",
@@ -393,6 +453,8 @@ export const schools: School[] = [
       { role: "Music/Theatre", name: "Ashley Song" },
     ],
     notes: "Jeremy DuBois's territory - 2011 signature risers",
+    lat: 33.8484,
+    lng: -117.9529,
   },
   {
     id: "cathedral-high-school",
@@ -406,6 +468,8 @@ export const schools: School[] = [
       { role: "Athletic Director", name: "Janae Hylland" },
     ],
     notes: "2005 - percussion cabinet\n**Last day of School on May 28th.",
+    lat: 34.0680,
+    lng: -118.2294,
   },
   {
     id: "mayfield-senior-school",
@@ -422,6 +486,8 @@ export const schools: School[] = [
       { role: "Choir Director", name: "Andrew Alvarez" },
     ],
     notes: "2003 - Legacy Shell",
+    lat: 34.1247,
+    lng: -118.1497,
   },
   {
     id: "st-francis-hs",
@@ -437,6 +503,8 @@ export const schools: School[] = [
       { role: "Assistant AD", name: "Edward Corcoran" },
     ],
     notes: "2011 - percussion workstation\n*Doesn't seem to have a music program, just theater",
+    lat: 34.2117,
+    lng: -118.1939,
   },
   {
     id: "la-salle-college-prep",
@@ -451,6 +519,8 @@ export const schools: School[] = [
       { role: "Athletic Director", name: "Daniel Threadgill" },
     ],
     notes: "2015 - stagetek",
+    lat: 34.1611,
+    lng: -118.0866,
   },
   {
     id: "providence-high-school",
@@ -467,6 +537,8 @@ export const schools: School[] = [
       { role: "Assistant Athletic Director", name: "Le'Von Davis" },
     ],
     notes: "2019 - Nota chairs, flex system",
+    lat: 34.1717,
+    lng: -118.3170,
   },
   {
     id: "ef-academy-pasadena",
@@ -480,6 +552,8 @@ export const schools: School[] = [
       { role: "Athletic Director", name: "Justin Clapp" },
     ],
     notes: "no activity or quotes",
+    lat: 34.1729,
+    lng: -118.1234,
   },
   {
     id: "southwestern-academy",
@@ -494,6 +568,8 @@ export const schools: School[] = [
       { role: "Visual/Performing Arts Chair", name: "John Kohn" },
     ],
     notes: "1998 - Travelmaster, class piano workstation",
+    lat: 34.1182,
+    lng: -118.1059,
   },
   {
     id: "the-thacher-school",
@@ -509,6 +585,8 @@ export const schools: School[] = [
       { role: "Athletic Director", name: "Etienne Emanuel" },
     ],
     notes: "2023 - student chairs",
+    lat: 34.4516,
+    lng: -119.2192,
   },
   {
     id: "idyllwild-arts-academy",
@@ -525,6 +603,8 @@ export const schools: School[] = [
       { role: "Business Operations", name: "Christina Steinbacher" },
     ],
     notes: "Jeremy DuBois' territory - 2019 chairs and carts\n*Specific arts school",
+    lat: 33.7411,
+    lng: -116.7245,
   },
   {
     id: "echo-horizon-school",
@@ -537,6 +617,8 @@ export const schools: School[] = [
       { role: "Music/Choir", name: "Elizabeth Cohn" },
     ],
     notes: "no activity \n*Grades 4-6",
+    lat: 34.0017,
+    lng: -118.4011,
   },
   {
     id: "turning-point-school",
@@ -552,6 +634,9 @@ export const schools: School[] = [
       { role: "Theater Coordinator", name: "Josh Lesser" },
     ],
     notes: "2020 - taxi carts\n* PreK-8 school",
+    // TODO: verify coords — address (Sylvan St) is in Van Nuys but location text says Culver City; pinned at the Sylvan St address as written.
+    lat: 34.1797,
+    lng: -118.4515,
   },
   {
     id: "le-lyc-e-fran-ais-de-la",
@@ -564,6 +649,9 @@ export const schools: School[] = [
       { role: "Athletic Director", name: "Greg Power" },
     ],
     notes: "no activity \n*No name listed for the arts but they do show that they have music, dance, theater on their website.",
+    // TODO: verify coords — distributed campuses; pinned at the main campus on Overland Ave.
+    lat: 34.0335,
+    lng: -118.4148,
   },
   {
     id: "immaculate-heart-hs",
@@ -578,6 +666,8 @@ export const schools: School[] = [
       { role: "Fine Arts Teachers", name: "Al Grindon, Heather Chesley, Lucinda Hanshaw" },
     ],
     notes: "1993 - risers",
+    lat: 34.1067,
+    lng: -118.3023,
   },
   {
     id: "berkeley-hall-school",
@@ -592,6 +682,8 @@ export const schools: School[] = [
       { role: "Athletic Director", name: "Justin Myers" },
     ],
     notes: "2009 - versalite decks\n**Grades PreK-8",
+    lat: 34.0942,
+    lng: -118.4892,
   },
 ];
 

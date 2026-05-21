@@ -96,16 +96,17 @@ School data is **static** — no runtime geocoding or external API. The 39
 schools live in `src/lib/schools.ts`, grouped into 4 tiers (canonical
 display order exported as `SCHOOL_TIERS`). Each `School` carries
 `id`, `name`, `tier`, `location`, `enrollment`, `projectActivity`,
-`contacts: { role, name }[]`, and `notes` (historical territory notes
-shown to reps as "Background"). Source of record:
-`California_Planning.xlsx` (Brooke, May 2026).
+`contacts: { role, name }[]`, `notes` (historical territory notes
+shown to reps as "Background"), and `lat`/`lng` (hand-derived from
+the location strings; a handful of multi-campus / address-inconsistent
+records carry `// TODO: verify coords` for the team to spot-check).
+Source of record: `California_Planning.xlsx` (Brooke, May 2026).
 
-**Cycle 14:** the prior 47-school dataset (hand-derived coordinates,
-`Tier` union) was replaced wholesale; the new sheet **does not carry
-lat/lng**, so the map view at `/map` is currently a tier-grouped
-scrollable list with a "Coordinates pending" banner. The Leaflet +
-OpenStreetMap machinery (`leaflet`, `react-leaflet` deps) is retained
-for a future geocoding cycle that will re-introduce pins.
+**Cycle 15:** the Leaflet pin map is back at `/map`. A Map/List toggle
+in the toolbar lets reps switch to the tier-grouped list for scanning
+by name. Search + tier-pill filters apply to both views. The Cycle 14
+"Coordinates pending" banner is gone now that the dataset carries
+lat/lng.
 
 ### Visit form & submissions
 
