@@ -163,7 +163,11 @@ async function fallbackByPrefix(
 // offline fall back to exact-match → /form/* prefix → synthetic 504
 // so the router can surface a normal error instead of the SW crashing
 // the navigation.
-const RSC_CACHE = "next-rsc-v2";
+// Cycle 14: bumped v2 → v3 to abandon cached RSC payloads that
+// referenced the pre-May-2026 school dataset (~47 entries with old ids
+// + lat/lng). New SW starts with an empty next-rsc-v3 and re-populates
+// it via the post-auth prefetch.
+const RSC_CACHE = "next-rsc-v3";
 const rscRoute: RuntimeCaching = {
   matcher: ({ request, url }) =>
     url.origin === self.location.origin &&
@@ -197,7 +201,10 @@ const rscRoute: RuntimeCaching = {
 // Offline → exact-match → /form/* prefix → cached "/" → navy offline
 // stub. Never throw (the iOS PWA "FetchEvent.respondWith received an
 // error" we hit on the first round was this path rejecting).
-const PAGES_CACHE = "pages-v2";
+// Cycle 14: bumped v2 → v3 alongside RSC. Cached /form/<id> HTML for
+// removed schools (Harvard-Westlake, Loyola, etc.) is no longer
+// useful; the post-auth prefetch repopulates with current schools[0].
+const PAGES_CACHE = "pages-v3";
 const navRoute: RuntimeCaching = {
   matcher: ({ request, url }) =>
     request.mode === "navigate" &&

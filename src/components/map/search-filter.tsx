@@ -1,16 +1,19 @@
 "use client";
 
 import { Search, X } from "lucide-react";
-import type { Tier } from "@/lib/schools";
+import { SCHOOL_TIERS } from "@/lib/schools";
 
-export type TierFilter = Tier | "all";
+// Cycle 14: the tier is now a long human-readable string (Brooke's
+// planning sheet). Short pill labels keep the chrome compact; the full
+// names are exact matches against SCHOOL_TIERS for filtering.
+export type TierFilter = (typeof SCHOOL_TIERS)[number] | "all";
 
 const TIER_PILLS: { key: TierFilter; label: string }[] = [
   { key: "all", label: "All" },
-  { key: "tier1", label: "Tier 1" },
-  { key: "core", label: "Core" },
-  { key: "catholic", label: "Catholic" },
-  { key: "expanded", label: "Expanded" },
+  { key: SCHOOL_TIERS[0], label: "Tier 1" },
+  { key: SCHOOL_TIERS[1], label: "Core" },
+  { key: SCHOOL_TIERS[2], label: "Catholic" },
+  { key: SCHOOL_TIERS[3], label: "Expanded" },
 ];
 
 export function SearchFilter({

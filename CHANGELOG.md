@@ -6,6 +6,108 @@ Format: `## Cycle N — Title (YYYY-MM-DD)` followed by a short prose summary, t
 
 ---
 
+## Cycle 14 — School dataset swap to Brooke's May-2026 planning sheet (2026-05-21)
+
+Replaced the entire school dataset with the authoritative California
+private-school list from Brooke's `California_Planning.xlsx` (May 2026).
+Dropped from ~47 entries to **39 schools** across **4 tiers**; added
+two new fields per record (`contacts: SchoolContact[]` and `notes`);
+collapsed `address`+`city` into a single `location` string; **removed
+`lat`/`lng`** (a future geocoding cycle will re-introduce coordinates).
+
+This is a data + types change, not a redesign — Brooke's visit-form
+redesign (contact-first layout, project/needs timeline, decision-maker
++ vendors + dealers + co-ops + funding source, marketing channels with
+nested socials, removal of "estimated opportunity size") is deferred
+to a dedicated form cycle. The `contacts` field added here is the
+data foundation that future form's contact selector will use.
+
+**GATE decisions (approved at proceed):**
+- **Proceeded from a non-clean working tree** — the new `schools.ts`
+  was pre-pasted on disk with an `old_schools.ts` backup. Used the
+  pre-pasted file as the source of truth; removed the backup at
+  Checkpoint A.
+- **Wiped `submissions` + `photos` tables in the live Neon database.**
+  Authorized: the app is in development, the new schools use a fresh
+  `id` scheme (kebab-slug of the new names), and otherwise every
+  prior submission would be orphaned to a deleted parent. No
+  schema/users/auth changes. Verified `count(*) === 0` on both.
+  7-row `users` table untouched.
+
+**Spec follow-through (flagged):**
+- **Map can't pin the new dataset** (no lat/lng). Per spec, did NOT
+  invent coordinates. Replaced the Leaflet map on `/map` with a
+  tier-grouped scrollable list + a "Coordinates pending" banner.
+  Same chrome (search + tier-pill filter); tapping a row still opens
+  the existing `<SchoolPreview>` with the Start visit CTA. The route
+  is intentionally named `/map` so the SW prefetch + tab bar wiring
+  don't move; the map view returns when the geocoding cycle lands.
+
+**Added**
+- `src/lib/schools.ts` — 39 schools, 4 tiers (10/8/11/10), with
+  `id`, `name`, `tier`, `location`, `enrollment`, `projectActivity`,
+  `contacts: { role, name }[]`, `notes`. New `SchoolContact` and
+  `SCHOOL_TIERS` (tuple, canonical display order) exports.
+- `src/components/map/school-list.tsx` — tier-grouped, alphabetized
+  within each tier; preserves the existing `<SchoolPreview>` flow on
+  selection; "no match" empty state.
+
+**Changed**
+- `<MapScreen>` — Leaflet `<SchoolMap>` swapped for `<SchoolList>` +
+  a one-line "Map coordinates are coming…" info banner. Preview
+  overlay moved out of the scrolling region so it pins to the visible
+  viewport, not scroll-bottom.
+- `<SearchFilter>` — `TierFilter` is now `SCHOOL_TIERS[number] |
+  "all"`; pill keys hold the full canonical tier strings; pill labels
+  stay short ("Tier 1", "Core", "Catholic", "Expanded").
+- `<SchoolPreview>` — dropped `TIER_LABELS`; tier badge renders the
+  canonical string directly. "Address" → "Location" (single
+  `whitespace-pre-line` string). New Contacts list + Background block
+  (read-only, hidden when empty).
+- `<SubmissionDetail>` — header location line uses `school.location`.
+  Two new collapsed-by-default sections: **School contacts** (role +
+  name list) and **Background** (school notes), hidden when empty.
+- `<SubmissionsList>` — replaced `CITY_BY_ID` with `LOCATION_BY_ID`
+  (first line of `location` for the row-hint).
+- `<EditSubmission>` — fallback `School` literal updated to the new
+  shape (tier, location, contacts, notes). Comments why: schools may
+  be removed between when a submission was logged and when it's
+  edited (the Cycle 14 swap dropped ~8 entries).
+- `<VisitForm>` — header line uses `school.location`.
+- `src/app/sw.ts` — bumped `PAGES_CACHE` and `RSC_CACHE` from `v2`
+  to `v3` so cached form HTML and submission RSC payloads referencing
+  the old dataset get abandoned. New SW starts with empty `pages-v3`
+  / `next-rsc-v3` and is repopulated by install prefetch +
+  post-auth client→SW prefetch.
+
+**Removed**
+- `src/components/map/school-map.tsx` — Leaflet pin map. Orphaned
+  after the list fallback. `leaflet`/`react-leaflet` deps kept in
+  `package.json` for the future geocoding cycle to re-introduce.
+- `src/lib/old_schools.ts` — the pre-paste backup; data lives in
+  git history.
+
+**Notes / verification**
+- **Zero new dependencies, zero new env vars, zero schema migrations.**
+- `npm run build` clean (27 routes, unchanged). `tsc --noEmit` clean.
+  Lint surfaces only the three pre-existing
+  `react-hooks/set-state-in-effect` / refs-during-render warnings
+  carried over from Cycle 12; no new errors from this cycle.
+- **Live DB state after wipe:** photos=0, submissions=0, users=7
+  (unchanged). Verified inline.
+- **Cap counts on the new dataset:** `schools.length === 39`,
+  per-tier 10/8/11/10, exactly one school with empty `contacts`
+  (Crossroads — its info is in `notes`; expected, not a bug).
+- **Out of scope, deferred:**
+  - Geocoding — re-introduce `lat`/`lng` for the 39 schools and bring
+    back the Leaflet map view.
+  - Brooke's visit-form redesign — contact selector backed by the
+    new `contacts` field, projects/needs timeline, decision-maker +
+    vendors/dealers/co-ops/funding-source restructure, marketing
+    channel preferences with nested socials, remove "estimated
+    opportunity size" from the priority block.
+- Live: https://valkolimark-wenger-field-notes.vercel.app
+
 ## Cycle 13 — Photo capture & vision summaries (2026-05-20)
 
 Reps now attach photos to a visit; photos persist through dead zones,

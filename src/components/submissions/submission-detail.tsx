@@ -182,7 +182,7 @@ export function SubmissionDetail({ id }: { id: string }) {
           )}
         </div>
         <p className="mt-1 text-sm text-brand-navy/55">
-          {school ? `${school.address}, ${school.city} · ` : ""}
+          {school?.location ? `${school.location} · ` : ""}
           {formatVisitDate(s.visitDate)} · Logged by {s.repName}
         </p>
       </header>
@@ -294,6 +294,35 @@ export function SubmissionDetail({ id }: { id: string }) {
             {s.notes.trim() || DASH}
           </p>
         </CollapsibleSection>
+
+        {/* Cycle 14: school-static context (people + historical notes from
+            Brooke's planning sheet). Collapsed by default so it doesn't
+            push the rep's own visit data offscreen. */}
+        {school && school.contacts.length > 0 && (
+          <CollapsibleSection title="School contacts" defaultOpen={false}>
+            <ul className="space-y-2">
+              {school.contacts.map((c, i) => (
+                <li
+                  key={`${c.role}-${c.name}-${i}`}
+                  className="rounded-xl border border-black/8 bg-white px-3 py-2"
+                >
+                  <p className="text-xs font-medium uppercase tracking-wide text-brand-navy/45">
+                    {c.role}
+                  </p>
+                  <p className="mt-0.5 text-sm text-brand-navy/85">{c.name}</p>
+                </li>
+              ))}
+            </ul>
+          </CollapsibleSection>
+        )}
+
+        {school && school.notes.trim() && (
+          <CollapsibleSection title="Background" defaultOpen={false}>
+            <p className="whitespace-pre-wrap text-sm leading-relaxed text-brand-navy/85">
+              {school.notes.trim()}
+            </p>
+          </CollapsibleSection>
+        )}
       </div>
     </div>
   );

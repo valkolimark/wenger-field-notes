@@ -3,7 +3,7 @@
 import { useEffect } from "react";
 import Link from "next/link";
 import { X } from "lucide-react";
-import { type School, TIER_LABELS } from "@/lib/schools";
+import { type School } from "@/lib/schools";
 import { buttonClass } from "@/components/ui/button";
 
 export function SchoolPreview({
@@ -58,18 +58,16 @@ export function SchoolPreview({
 
         <div className="flex-1 overflow-y-auto px-5 pb-4">
           <span className="inline-block rounded-full bg-brand-navy/8 px-2.5 py-1 text-[11px] font-medium text-brand-navy">
-            {TIER_LABELS[school.tier]}
+            {school.tier}
           </span>
 
           <dl className="mt-4 space-y-3 text-sm">
             <div>
               <dt className="text-xs font-medium uppercase tracking-wide text-brand-navy/45">
-                Address
+                Location
               </dt>
-              <dd className="mt-0.5 text-brand-navy/80">
-                {school.address}
-                <br />
-                {school.city}
+              <dd className="mt-0.5 whitespace-pre-line text-brand-navy/80">
+                {school.location}
               </dd>
             </div>
             <div>
@@ -86,6 +84,36 @@ export function SchoolPreview({
                 {school.projectActivity}
               </dd>
             </div>
+            {school.contacts.length > 0 && (
+              <div>
+                <dt className="text-xs font-medium uppercase tracking-wide text-brand-navy/45">
+                  Contacts
+                </dt>
+                <dd className="mt-1 space-y-1.5">
+                  {school.contacts.map((c, i) => (
+                    <div
+                      key={`${c.role}-${c.name}-${i}`}
+                      className="rounded-lg bg-brand-navy/[0.04] px-2.5 py-1.5"
+                    >
+                      <p className="text-[11px] font-medium uppercase tracking-wide text-brand-navy/55">
+                        {c.role}
+                      </p>
+                      <p className="text-brand-navy/85">{c.name}</p>
+                    </div>
+                  ))}
+                </dd>
+              </div>
+            )}
+            {school.notes.trim() && (
+              <div>
+                <dt className="text-xs font-medium uppercase tracking-wide text-brand-navy/45">
+                  Background
+                </dt>
+                <dd className="mt-0.5 whitespace-pre-line leading-relaxed text-brand-navy/80">
+                  {school.notes.trim()}
+                </dd>
+              </div>
+            )}
           </dl>
         </div>
 

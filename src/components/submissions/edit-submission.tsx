@@ -141,14 +141,21 @@ export function EditSubmission({ id }: { id: string }) {
     );
   }
 
+  // Cycle 14: schools may be removed from the dataset between when a
+  // submission was logged and when it's edited (Brooke's May 2026 swap
+  // dropped ~8 entries). Fall back to a minimal stub so edit still works
+  // even if the schoolId no longer matches any current row.
   const school: School =
-    schools.find((s) => s.id === sub.schoolId) ??
-    ({
+    schools.find((s) => s.id === sub.schoolId) ?? {
       id: sub.schoolId,
       name: sub.schoolName,
-      address: "",
-      city: "",
-    } as unknown as School);
+      tier: "",
+      location: "",
+      enrollment: "",
+      projectActivity: "",
+      contacts: [],
+      notes: "",
+    };
 
   return (
     <VisitForm

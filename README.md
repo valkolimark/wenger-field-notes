@@ -92,12 +92,20 @@ Next.js 16 (App Router) · TypeScript · Tailwind CSS v4 · Leaflet + react-leaf
 
 ### Data
 
-School data is **static** — no runtime geocoding or external API. The 47
-schools live in `src/lib/schools.ts` (`Tier` union, `TIER_LABELS`, `School`
-interface, `schools` sorted by name). Coordinates are hand-derived from the
-source addresses; a few ambiguous ones are marked `// TODO: verify coords`.
-Source of record: `docs/California Private School- LA and Architects.docx`.
-The interactive map uses Leaflet with free OpenStreetMap tiles (no API key).
+School data is **static** — no runtime geocoding or external API. The 39
+schools live in `src/lib/schools.ts`, grouped into 4 tiers (canonical
+display order exported as `SCHOOL_TIERS`). Each `School` carries
+`id`, `name`, `tier`, `location`, `enrollment`, `projectActivity`,
+`contacts: { role, name }[]`, and `notes` (historical territory notes
+shown to reps as "Background"). Source of record:
+`California_Planning.xlsx` (Brooke, May 2026).
+
+**Cycle 14:** the prior 47-school dataset (hand-derived coordinates,
+`Tier` union) was replaced wholesale; the new sheet **does not carry
+lat/lng**, so the map view at `/map` is currently a tier-grouped
+scrollable list with a "Coordinates pending" banner. The Leaflet +
+OpenStreetMap machinery (`leaflet`, `react-leaflet` deps) is retained
+for a future geocoding cycle that will re-introduce pins.
 
 ### Visit form & submissions
 

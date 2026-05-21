@@ -13,7 +13,12 @@ import { RowsSkeleton } from "@/components/ui/skeleton";
 import { useSubmissions } from "./use-submissions";
 import { SyncStatusStrip } from "@/components/sync/sync-status-strip";
 
-const CITY_BY_ID = new Map(schools.map((s) => [s.id, s.city]));
+// Cycle 14: location is now a single human-readable string (Brooke's
+// May-2026 planning sheet collapsed address+city). Take the first
+// line as the compact list-row hint.
+const LOCATION_BY_ID = new Map(
+  schools.map((s) => [s.id, s.location.split("\n")[0]?.trim() ?? ""]),
+);
 
 function priorityShort(visitPriority: string): string {
   return visitPriority.split("—")[0]?.trim() || visitPriority || "—";
@@ -129,8 +134,8 @@ export function SubmissionsList() {
                     )}
                   </div>
                   <p className="mt-0.5 text-xs text-brand-navy/50">
-                    {CITY_BY_ID.get(s.schoolId)
-                      ? `${CITY_BY_ID.get(s.schoolId)} · `
+                    {LOCATION_BY_ID.get(s.schoolId)
+                      ? `${LOCATION_BY_ID.get(s.schoolId)} · `
                       : ""}
                     {formatVisitDate(s.visitDate)}
                   </p>

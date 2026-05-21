@@ -467,7 +467,7 @@ export function VisitForm({
           {school.name}
         </h1>
         <p className="mt-1 text-sm text-brand-navy/55">
-          {school.address}, {school.city}
+          {school.location}
         </p>
         <p className="mt-1 text-xs text-brand-navy/40">
           {isEdit
