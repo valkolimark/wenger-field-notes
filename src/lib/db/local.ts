@@ -21,8 +21,18 @@ export type PendingStatus = "pending" | "syncing" | "synced" | "failed";
 
 // Current pending_submissions shape revision. Bump when the queued
 // submission payload changes; the sync engine / server can detect old
-// shapes and migrate or reject (groundwork only this cycle).
-export const PENDING_SCHEMA_VERSION = 1;
+// shapes and migrate or reject.
+// Cycle 18: bumped 1 → 2 because Brooke's visit-form redesign changed
+// the VisitFormData shape entirely (priority + decisionMaking gone;
+// new contact/projectsNeeds/purchasing/marketing). Old-shape pending
+// rows would 400 against the new POST /api/submissions validators —
+// the one-shot `purgeOutdatedLocalState()` below drops them so reps
+// don't see permanently-failing sync badges after the deploy.
+export const PENDING_SCHEMA_VERSION = 2;
+// Cycle 18: drafts gain a schemaVersion too (was untracked). Old
+// drafts have no version and get purged below to avoid restoring an
+// old-shape draft into the new form (which would runtime-error).
+export const DRAFT_SCHEMA_VERSION = 1;
 
 // Cycle 13: photo row shape revision. Independent of submissions; bump
 // when the local photo payload changes.
@@ -41,6 +51,9 @@ export interface DraftRow {
    *  Optional for backward compat with v1 drafts written pre-Cycle 13;
    *  the form mints one and persists it on first autosave. */
   submissionId?: string;
+  /** Cycle 18: shape revision the draft was written against. Absent
+   *  on pre-Cycle-18 drafts (purged by purgeOutdatedLocalState). */
+  schemaVersion?: number;
   updatedAt: string; // ISO
 }
 
@@ -156,6 +169,7 @@ export async function saveDraft(
       schoolId,
       data,
       ...(submissionId ? { submissionId } : {}),
+      schemaVersion: DRAFT_SCHEMA_VERSION,
       updatedAt: new Date().toISOString(),
     });
   } catch {
@@ -240,10 +254,9 @@ export async function updatePendingContent(
   if (!row) return { ok: false, reason: "missing" };
   if (row.status !== "pending") return { ok: false, reason: "not-pending" };
   await localDb.pending.update(id, {
-    priority: patch.priority,
     contact: patch.contact,
+    projectsNeeds: patch.projectsNeeds,
     purchasing: patch.purchasing,
-    decisionMaking: patch.decisionMaking,
     marketing: patch.marketing,
     notes: patch.notes,
   });
@@ -370,5 +383,43 @@ export async function updateLocalPhotoCaption(
 export async function deleteLocalPhoto(id: string): Promise<void> {
   if (!hasBrowserDb()) return;
   await localDb.photos.delete(id);
+}
+
+// --- one-shot purge of outdated local state (Cycle 18) -----------------
+// Brooke's form redesign changed the VisitFormData shape entirely.
+// Old-shape pending rows would 400 against the new POST /api/submissions
+// validators (permanently-failed sync badges). Old-shape drafts would
+// runtime-error when restored into the new form (it reads
+// data.projectsNeeds.timeline etc., which old drafts don't have).
+//
+// This helper drops any pending row whose `schemaVersion` is below the
+// current PENDING_SCHEMA_VERSION, AND any draft missing the new
+// `schemaVersion` field (or with a lower value). One-shot: the sync
+// engine calls it once per app load (idempotent, cheap, also a no-op
+// for rare cases where nothing's outdated). New rows always carry the
+// current version so they're never dropped accidentally.
+
+let purgedOnce = false;
+
+export async function purgeOutdatedLocalState(): Promise<void> {
+  if (!hasBrowserDb()) return;
+  if (purgedOnce) return;
+  purgedOnce = true;
+  try {
+    const pendingRows = await localDb.pending.toArray();
+    for (const row of pendingRows) {
+      if ((row.schemaVersion ?? 0) < PENDING_SCHEMA_VERSION) {
+        await localDb.pending.delete(row.id);
+      }
+    }
+    const draftRows = await localDb.drafts.toArray();
+    for (const draft of draftRows) {
+      if ((draft.schemaVersion ?? 0) < DRAFT_SCHEMA_VERSION) {
+        await localDb.drafts.delete(draft.key);
+      }
+    }
+  } catch {
+    /* best-effort; non-fatal */
+  }
 }
 

@@ -9,10 +9,16 @@ import {
 } from "drizzle-orm/pg-core";
 import type { VisitFormData } from "@/lib/submissions";
 
-// The 5 sectioned blocks are jsonb typed against the Cycle 4 form
-// sub-types — the shape is owned by src/lib/submissions.ts, so adding a
-// form field never requires a schema migration. (Per-field SQL filtering
-// isn't needed until Cycle 7.)
+// Sectioned blocks are jsonb typed against the form sub-types — the
+// shape is owned by src/lib/submissions.ts, so adding a field within
+// a block doesn't need a schema migration (only structural changes do).
+//
+// Cycle 18 (Brooke's redesign): the old `priority` + `decision_making`
+// columns are gone, and `contact`/`purchasing`/`marketing` are re-typed
+// against the new sub-types. Old rows are NOT migrated — Cycle 14's
+// precedent (dev data, wipe-then-re-seed) is reused under user
+// authorization. The new `projects_needs` jsonb replaces what the old
+// `priority` + `decision_making` columns covered (timeline lives here).
 export const submissions = pgTable(
   "submissions",
   {
@@ -22,15 +28,12 @@ export const submissions = pgTable(
     repId: text("rep_id").notNull(),
     repName: text("rep_name").notNull(),
     visitDate: timestamp("visit_date", { withTimezone: true }).notNull(),
-    priority: jsonb("priority")
-      .$type<VisitFormData["priority"]>()
-      .notNull(),
     contact: jsonb("contact").$type<VisitFormData["contact"]>().notNull(),
+    projectsNeeds: jsonb("projects_needs")
+      .$type<VisitFormData["projectsNeeds"]>()
+      .notNull(),
     purchasing: jsonb("purchasing")
       .$type<VisitFormData["purchasing"]>()
-      .notNull(),
-    decisionMaking: jsonb("decision_making")
-      .$type<VisitFormData["decisionMaking"]>()
       .notNull(),
     marketing: jsonb("marketing")
       .$type<VisitFormData["marketing"]>()

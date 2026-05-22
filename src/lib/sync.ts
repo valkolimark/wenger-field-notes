@@ -31,6 +31,7 @@ import {
   deleteLocalPhoto,
   setPendingStatus,
   setPhotoStatus,
+  purgeOutdatedLocalState,
   type PendingRow,
   type LocalPhotoRow,
 } from "@/lib/db/local";
@@ -189,10 +190,16 @@ export async function retryPhoto(id: string): Promise<void> {
 }
 
 /** Mount once (e.g. in AppShell). Wires the online listener, interval,
- *  and initial drain. Safe to call repeatedly — guards in-flight. */
+ *  and initial drain. Safe to call repeatedly — guards in-flight.
+ *  Cycle 18: runs the one-shot Dexie schema-version purge BEFORE the
+ *  first drain so any old-shape pending rows are dropped (won't 400 in
+ *  flight) and old-shape drafts are dropped (won't crash the form). */
 export function useSyncEngine() {
   useEffect(() => {
-    void drainOnce();
+    void (async () => {
+      await purgeOutdatedLocalState();
+      void drainOnce();
+    })();
     const onOnline = () => void drainOnce();
     window.addEventListener("online", onOnline);
     const t = setInterval(() => void drainOnce(), 60_000);
