@@ -11,6 +11,10 @@ import { Button, buttonClass } from "@/components/ui/button";
 import { useToast } from "@/components/ui/toast";
 import { CollapsibleSection } from "@/components/form/collapsible-section";
 import { PhotoGallery } from "@/components/photos/photo-gallery";
+import {
+  readUrlSegment,
+  SUBMISSION_ID_PATH,
+} from "@/lib/url-id";
 
 const DASH = "—";
 const SCHOOL_BY_ID = new Map(schools.map((s) => [s.id, s]));
@@ -32,7 +36,14 @@ const list = (arr: string[]) => (arr.length ? arr.join(", ") : DASH);
 
 type Status = "loading" | "ok" | "notfound" | "error";
 
-export function SubmissionDetail({ id }: { id: string }) {
+export function SubmissionDetail({ id: idFromProps }: { id: string }) {
+  // Cycle 17: read the URL bar instead of the server-passed prop —
+  // when the SW serves a cached /submissions/__prefetch__ HTML for
+  // /submissions/<realId> offline (Cycle 16 prefix fallback), the
+  // prop would be "__prefetch__" and the detail view would show a
+  // "not found" for every real submission. See lib/url-id.ts.
+  const id = readUrlSegment(SUBMISSION_ID_PATH, idFromProps);
+
   const router = useRouter();
   const { success, error: toastError, confirm } = useToast();
   const [status, setStatus] = useState<Status>("loading");

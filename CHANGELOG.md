@@ -6,6 +6,82 @@ Format: `## Cycle N — Title (YYYY-MM-DD)` followed by a short prose summary, t
 
 ---
 
+## Cycle 17 — Offline wrong-school bug fix (URL bar as source of truth) (2026-05-22)
+
+**Field report after Cycle 16:** a rep opened Brentwood online, went
+offline, force-quit, reopened, tapped Fairmont Prep, started a visit
+— the **Brentwood** form came up, and submitting saved the visit as
+**Brentwood**. The wrong-school submission is the data-corruption
+half of a deeper bug.
+
+**Root cause.** The Cycle 12 `/form/*` and Cycle 16 `/submissions/*`
+SW prefix fallbacks serve ONE cached HTML/RSC entry for every URL
+matching the pattern. Cycle 12's design relied on `useParams()` in
+the client resolver "picking up the actual current schoolId at
+render time." That assumption is wrong for the cached-fallback case:
+useParams() reads from the App Router's route tree, whose segment
+params come from the (offline-cached) RSC payload — not the URL bar.
+When the SW serves `/form/<brentwood>` HTML+RSC for a `/form/<fairmont>`
+URL, useParams returns `"brentwood"`, the resolver looks up
+Brentwood's school, the form renders Brentwood, the save handler uses
+`school.id = "brentwood..."`, and the rep's "Fairmont" visit lands in
+the DB as a Brentwood visit. Same risk applies for Cycle 16's
+`/submissions/__prefetch__` template: the prop chain feeds the
+placeholder id into EditSubmission / SubmissionDetail, masking the
+real id from the URL.
+
+**Fix: URL bar as source of truth.** New helper
+`src/lib/url-id.ts → readUrlSegment(pattern, fallback)` reads
+`window.location.pathname` on the client (the post-hydration URL,
+which is always what the rep tapped) and falls back to the caller-
+supplied value during SSR. Applied to all three dynamic-route
+client resolvers:
+
+- `<VisitFormResolver>` — drops `useParams()`. Reads schoolId via
+  `readUrlSegment(FORM_SCHOOL_ID_PATH, "")`. Same `schools.find()`
+  lookup downstream, so the form + the save handler's `school.id`
+  both reflect the URL bar.
+- `<EditSubmission>` — keeps the `id` prop in the signature (SSR
+  still needs a value), but the body reads
+  `readUrlSegment(SUBMISSION_ID_PATH, idFromProps)` and uses THAT
+  for the load() callback + everywhere downstream.
+- `<SubmissionDetail>` — same change as EditSubmission.
+
+**What this DOES NOT change:** the SW behavior, the prefetch lists,
+the cache versions, or any other Cycle 16 plumbing. The fallbacks
+still serve cached HTML for every matching URL — they just no longer
+mislead the client component about which id the rep tapped. A brief
+hydration mismatch (server-rendered HTML has the cached id; client
+re-render shows the URL bar's id) is acceptable because: (a) React
+patches up the subtree on mismatch, and (b) the SAVE PATH uses the
+client-resolved id, so a wrong-school submission cannot be created
+even if the heading text flickers for one paint.
+
+**Added**
+- `src/lib/url-id.ts` — `readUrlSegment(pattern, fallback)` plus
+  pre-compiled `FORM_SCHOOL_ID_PATH` and `SUBMISSION_ID_PATH`
+  regexes. Captures the dynamic segment as group 1; safely decodes.
+
+**Changed**
+- `<VisitFormResolver>` — `useParams()` import + read replaced by
+  `readUrlSegment(FORM_SCHOOL_ID_PATH, "")`.
+- `<EditSubmission>` — id prop renamed to `idFromProps` (kept for
+  SSR fallback); body uses `readUrlSegment(SUBMISSION_ID_PATH, ...)`.
+- `<SubmissionDetail>` — same change.
+
+**Notes / verification**
+- Zero new dependencies, zero env vars, zero schema migrations, no
+  SW changes (no cache version bump needed — only client component
+  behavior changes).
+- `npm run build` clean (27 routes, unchanged). `tsc --noEmit` clean.
+- **Team's portion of the live check (the bug repro):** open online,
+  look at one school (e.g. Brentwood). Airplane mode → force-quit →
+  reopen. Tap a DIFFERENT school (e.g. Fairmont Prep). Form should
+  open with Fairmont's name; saving should produce a Fairmont
+  submission, not a Brentwood one. Same for opening a different
+  pending submission's detail and edit views.
+- Live: https://valkolimark-wenger-field-notes.vercel.app
+
 ## Cycle 16 — Offline route coverage extension (2026-05-21)
 
 Field feedback after Cycle 15:

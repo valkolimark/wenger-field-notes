@@ -9,6 +9,10 @@ import type { Submission } from "@/lib/submissions";
 import { getPending } from "@/lib/db/local";
 import { useToast } from "@/components/ui/toast";
 import { VisitForm } from "@/components/form/visit-form";
+import {
+  readUrlSegment,
+  SUBMISSION_ID_PATH,
+} from "@/lib/url-id";
 
 type Status = "loading" | "ok" | "notfound" | "forbidden" | "error";
 
@@ -22,7 +26,17 @@ const backLink = (
   </Link>
 );
 
-export function EditSubmission({ id }: { id: string }) {
+export function EditSubmission({ id: idFromProps }: { id: string }) {
+  // Cycle 17: prefer the URL bar over the server-passed prop.
+  // Background: the Cycle 16 /submissions/* prefix-fallback in the SW
+  // serves cached /submissions/__prefetch__/edit HTML for any
+  // /submissions/<realId>/edit URL offline. The server-rendered HTML
+  // baked `id="__prefetch__"` into the EditSubmission prop chain, so
+  // the hydrated client component would try to load "__prefetch__"
+  // (not the rep's real submission). The URL bar is the source of
+  // truth for what the rep tapped.
+  const id = readUrlSegment(SUBMISSION_ID_PATH, idFromProps);
+
   // Cycle 12: when the save handler hits a "row syncing/synced" race it
   // redirects here with `?just-synced=1` — we then bypass Dexie and
   // load from the server in non-pending mode.
