@@ -207,11 +207,12 @@ async function fallbackByAnyMatcher(
 // offline fall back to exact-match → /form/* prefix → synthetic 504
 // so the router can surface a normal error instead of the SW crashing
 // the navigation.
-// Cycle 14 v2→v3; Cycle 15 v3→v4; Cycle 16 v4→v5; Cycle 17 followup
-// v5→v6 to abandon cached /form/<sample> HTML that contained "School
-// not found" (the brief Cycle 17 server-render regression). New SW
-// install repopulates with the skeleton-rendering HTML.
-const RSC_CACHE = "next-rsc-v6";
+// Cycle 14 v2→v3; Cycle 15 v3→v4; Cycle 16 v4→v5; Cycle 17 v5→v6;
+// Cycle 18 v6→v7 — Brooke's visit-form redesign changed the rendered
+// HTML/RSC of /form/* + /submissions/* sufficiently that any cached
+// pre-Cycle-18 entries should be abandoned and re-prefetched on the
+// new install. Same hygiene as the prior bumps.
+const RSC_CACHE = "next-rsc-v7";
 const rscRoute: RuntimeCaching = {
   matcher: ({ request, url }) =>
     url.origin === self.location.origin &&
@@ -245,10 +246,11 @@ const rscRoute: RuntimeCaching = {
 // Offline → exact-match → /form/* prefix → cached "/" → navy offline
 // stub. Never throw (the iOS PWA "FetchEvent.respondWith received an
 // error" we hit on the first round was this path rejecting).
-// Cycle 14 v2→v3; Cycle 15 v3→v4; Cycle 16 v4→v5; Cycle 17 followup
-// v5→v6 paired with the RSC bump above (abandons "School not found"
-// HTML from the brief Cycle 17 regression).
-const PAGES_CACHE = "pages-v6";
+// Cycle 14 v2→v3; Cycle 15 v3→v4; Cycle 16 v4→v5; Cycle 17 v5→v6;
+// Cycle 18 v6→v7 paired with the RSC bump above (abandons cached
+// pre-Cycle-18 form / submission HTML so the install handler
+// repopulates with the new redesigned shell).
+const PAGES_CACHE = "pages-v7";
 const navRoute: RuntimeCaching = {
   matcher: ({ request, url }) =>
     request.mode === "navigate" &&

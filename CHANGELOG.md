@@ -6,6 +6,142 @@ Format: `## Cycle N — Title (YYYY-MM-DD)` followed by a short prose summary, t
 
 ---
 
+## Cycle 18 — Brooke's visit-form redesign (2026-05-22)
+
+Brooke's deferred form redesign lands — contact-first layout,
+Projects/Needs with timeline, Purchasing (decision-maker + vendors +
+dealers + co-ops + funding), Marketing (channels with nested socials
++ trade shows), orange priority block deleted. Built as **one cycle,
+five checkpoints (A–E)** like Cycles 12/13.
+
+**GATE decisions (approved at proceed):**
+- **Destructive migration + second submissions/photos wipe in the
+  live Neon DB.** Same Cycle 14 precedent (dev data, wipe-and-reseed
+  is cheaper + safer than a JSON-reshaping backfill for the new shape).
+  `priority` + `decision_making` columns dropped; `projects_needs`
+  jsonb added; `contact`/`purchasing`/`marketing` re-typed at the TS
+  layer via Drizzle `$type<>` (column type unchanged at SQL level).
+  Wipe: BEFORE photos=0 submissions=3 → AFTER photos=0 submissions=0.
+  `users` untouched (7 rows).
+- **Parallel `*Other` strings per group** (not inline `"Other: foo"`
+  in arrays). Cleaner CSV columns + AI prompts + type safety;
+  reducer also defensively clears the `*Other` text when its anchor
+  option un-selects.
+- **Save-anything form** — no required fields anymore. Cold-call
+  cadence; reps may capture very little. Server validators only
+  require identity scaffolding (id/schoolId/schoolName/visitDate);
+  block shapes are merged onto empty defaults so sparse POST/PATCH
+  succeeds.
+- **CYCLE_1.md cleanup** — the original project-kickoff brief had
+  been left as an unstaged delete; bundled into the Cycle 18 first
+  commit so the working tree is clean.
+
+**Spec follow-through:**
+- **Photos** section stays exactly where Cycle 13 put it (between
+  Marketing and Notes) — Brooke's brief didn't mention photos, so
+  the Cycle 13 placement is preserved.
+- **Warm `#b8612a` token** stays (brand). The form no longer renders
+  a warm priority block, but the token is still used elsewhere:
+  pending-sync badge in the submissions list + tab bar, photo
+  "Uploading" pill, tab-bar active-tab underline, admin nav,
+  sync-status strip. Nothing else relied on the priority block for
+  layout.
+
+**Added**
+- `src/lib/submissions.ts` — new sub-types `ContactBlock`,
+  `ProjectsNeedsBlock`, `PurchasingBlock`, `MarketingBlock`; new
+  option sets `TIMELINE_OPTIONS`, `DECISION_MAKER_OPTIONS`,
+  `DEALER_OPTIONS`, `FUNDING_OPTIONS`, `MARKETING_CHANNEL_OPTIONS`,
+  `SOCIAL_PLATFORM_OPTIONS`; new `normalizeFormData()` helper
+  (called by both the client save path and the server validators —
+  same canonical shape on both sides).
+- Drizzle migration `drizzle/0003_cycle18_resection.sql` — hand-
+  written + custom-scaffolded because `drizzle-kit generate` hit
+  the rename-vs-drop+add interactive prompt with no TTY in this
+  environment. Applied to live Neon via `npx drizzle-kit migrate`.
+- Dexie: `DRAFT_SCHEMA_VERSION = 1` + `DraftRow.schemaVersion`
+  field; `PENDING_SCHEMA_VERSION` bumped 1 → 2; new
+  `purgeOutdatedLocalState()` helper (one-shot per app load) drops
+  any pending row with `schemaVersion < 2` (old-shape rows would
+  400 against the new validators) and any draft without the new
+  `schemaVersion` (old-shape drafts would crash the new form on
+  restore). Wired into `useSyncEngine()` so it runs before the
+  first drain.
+
+**Changed**
+- `<VisitForm>` rewritten — contact-first non-collapsible block
+  (school.contacts dropdown, email, phone, met-someone-else free
+  text). 4 collapsible sections in this order: Projects / Needs,
+  Purchasing, Marketing, **Photos** (kept where Cycle 13 put it),
+  Notes. Reducer action types updated to the new blocks. Required-
+  field machinery removed (no priorityRef, no scroll-to-error).
+  `save()` calls `normalizeFormData(form)` before persisting. Photo
+  capture / draft autosave / back-confirm / mid-sync race detection
+  all unchanged in plumbing.
+- `<SubmissionDetail>` (rep + admin own-row) — orange priority
+  block deleted; replaced with white contact-first block. Sections
+  re-shaped to Projects / Needs, Purchasing (with joinList/
+  joinDecision helpers that fold canonical + Other into one
+  readable line), Marketing. School-static "School contacts" +
+  "Background" collapsibles (Cycle 14) preserved.
+- `<SubmissionsList>` — priority chip dropped. New `rowPreview()`
+  leads with currentNeeds → upcomingProjects → notes excerpt →
+  "Visit logged".
+- `<AdminSubmissions>` — expanded-row dl regenerated for the new
+  shape; closed-row chip swapped from `shortPriority()` to an
+  optional `timelineChip()` (only renders when the rep captured
+  a timeline).
+- `src/lib/csv.ts` — header + row builder rewritten. No
+  `priority_*` columns; new `contact_*`, `projectsNeeds_*`,
+  `purchasing_*` (with `*_other` companion columns), `marketing_*`
+  (with `*_other` + `socialPlatforms`). Multi-selects still
+  "; "-joined.
+- `src/lib/summarize-prompts.ts` — pipeline/rep/visit prompt
+  templates no longer reference priority/opportunity-size/next-
+  action; rendered output structure now uses currentNeeds /
+  upcomingProjects / timeline / decisionMaker / funding as the
+  pipeline-signal fields. Photo blocks + injection-defense guard
+  + token-cap preflight unchanged.
+- `POST /api/submissions` + `PATCH /api/submissions/[id]` —
+  required-fields list shrunk to identity scaffolding only; body
+  merged onto `createEmptyForm()` defaults; `normalizeFormData()`
+  called server-side; identity stays immutable on PATCH.
+- `src/app/sw.ts` cache versions bumped `pages-v6 → pages-v7` and
+  `next-rsc-v6 → next-rsc-v7`. Same hygiene as Cycles 14–17.
+
+**Removed**
+- All Cycle 4–8 priority / decision-making types + 11 old option
+  sets from `src/lib/submissions.ts`.
+- Priority column (jsonb) and decision_making column (jsonb) from
+  `submissions` table (via migration 0003).
+- `CYCLE_1.md` (the original project-kickoff brief; staged delete
+  housekeeping).
+
+**Notes / verification**
+- Zero new dependencies, zero env vars. One destructive schema
+  migration + one destructive data wipe (both user-authorized).
+- `npm run build` clean (27 routes, unchanged). `tsc --noEmit`
+  clean. Built `public/sw.js` carries `pages-v7` + `next-rsc-v7`
+  + the Cycle 15 `/form/<schools[0].id>` install prefetch (resolves
+  to `/form/brentwood-school-east-campus-6-12` at install) + the
+  Cycle 16 `/submissions/__prefetch__` and
+  `/submissions/__prefetch__/edit` templates — verified inline.
+- **Live DB state after the authorized wipe:** photos=0,
+  submissions=0, users=7 (unchanged). New `projects_needs` column
+  present; `priority` and `decision_making` columns absent.
+- **Team's portion of the live check:** open any school → contact
+  selector is the first thing on the page (prefilled from
+  `school.contacts`; Crossroads still has no contacts, the field
+  greys out with a hint to use "Met with someone else"). Fill +
+  Save → My Submissions row shows currentNeeds/upcomingProjects
+  preview (not priority). Detail view shows the new sections.
+  Edit prefills correctly. Admin CSV has the new columns. AI
+  pipeline summary references needs/timeline, not priority.
+  Offline: form opens, draft autosaves, save → pending sync →
+  reconnect drains. Pre-Cycle-18 local pending/drafts are dropped
+  by `purgeOutdatedLocalState()` on next app load.
+- Live: https://valkolimark-wenger-field-notes.vercel.app
+
 ## Cycle 17 followup — VisitFormResolver renders skeleton until URL resolves (2026-05-22)
 
 The initial Cycle 17 fix replaced `useParams()` with
