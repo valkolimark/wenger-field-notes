@@ -3,140 +3,130 @@
 // Cycle 12 moved drafts (and a new pending_submissions queue) to
 //   IndexedDB via Dexie (`src/lib/db/local.ts`) — the draft helpers
 //   that used to live here are gone.
+// Cycle 18 (Brooke's visit-form redesign): the priority block is gone
+//   and the section shapes are completely reorganized
+//   (contact-first; new Projects/Needs, Purchasing, Marketing).
+//   "Other: ___" is stored as a parallel `*Other` string per group
+//   (cleaner CSV + AI prompts than inlining `"Other: foo"` in arrays).
 // What stays here: the canonical types, option sets, id minter, and
 // date formatters used by every UI surface.
 
 export const SUBMISSIONS_KEY = "wenger.submissions.v1";
 
-// --- Option sets (shared by the form, list badge, and detail view) ---
+// --- Option sets (shared by the form, list, detail view, CSV, prompts) ---
 
-export const VISIT_PRIORITY_OPTIONS = [
-  "Hot — active opportunity",
-  "Warm — building relationship",
-  "Cold — exploratory",
-  "Maintenance — existing customer",
-] as const;
-
-export const PROJECT_TIMING_OPTIONS = [
-  "Active now",
+// Cycle 18 — Projects/Needs timeline (replaces the old projectTiming
+// + opportunitySize fields). Single-select radio.
+export const TIMELINE_OPTIONS = [
+  "ASAP",
   "Next 6 months",
   "6–18 months",
   "18+ months",
   "Unknown",
 ] as const;
+export type Timeline = (typeof TIMELINE_OPTIONS)[number];
 
-export const OPPORTUNITY_SIZE_OPTIONS = [
-  "Under $25K",
-  "$25K–$100K",
-  "$100K–$500K",
-  "$500K+",
-  "Unknown",
+// Cycle 18 — Purchasing: who makes the decisions.
+// "Other" is NOT in the canonical list; it's handled via a parallel
+// `decisionMakerOther` string field (and a sentinel "Other" value on
+// the main field while the rep is filling the Other text in).
+export const DECISION_MAKER_OPTIONS = [
+  "Head of School",
+  "Operations/Business",
+  "Visual/Performing Arts Department",
+  "Athletics Department",
 ] as const;
 
-export const MET_WITH_OPTIONS = [
-  "Head of school",
-  "Athletic director",
-  "Director of facilities",
-  "Performing arts director",
-  "Music director",
-  "Business officer",
-  "Other",
+// Cycle 18 — Dealers multi-select. Parallel `dealersOther` string for
+// the Other fill-in (same convention as the rest of the Other fields).
+export const DEALER_OPTIONS = [
+  "Music & Arts",
+  "School Specialty",
+  "Virco",
 ] as const;
 
-export const DECISION_AUTHORITY_OPTIONS = [
-  "Final decision-maker",
-  "Influencer / recommender",
-  "Gatekeeper",
-  "Unknown",
+// Cycle 18 — Funding sources multi-select. Parallel `fundingOther`.
+export const FUNDING_OPTIONS = [
+  "Annual Budget",
+  "Capital Campaign",
+  "Donations",
+  "Grants",
+  "Booster Club",
+  "Foundation",
 ] as const;
 
-export const PROCUREMENT_OPTIONS = [
-  "Direct purchase",
-  "Bid / RFP",
-  "Architect-specified",
-  "Through district",
-  "Unknown",
+// Cycle 18 — Marketing channel preferences. Parallel `channelsOther`.
+// "Social Media" is a checkbox here; its nested platforms live in a
+// separate field (only meaningful when this checkbox is set).
+export const MARKETING_CHANNEL_OPTIONS = [
+  "Email",
+  "Phone Calls",
+  "In person visits",
+  "Social Media",
+  "Printed Materials",
+  "Trade Shows/Events",
 ] as const;
 
-export const BUDGET_STATUS_OPTIONS = [
-  "Funded",
-  "Partially funded",
-  "Pursuing funding",
-  "No budget yet",
-  "Unknown",
+// Cycle 18 — Nested social platforms (only relevant when
+// MARKETING_CHANNEL_OPTIONS includes "Social Media" in `channels`).
+// Cleared on save if "Social Media" is not checked.
+export const SOCIAL_PLATFORM_OPTIONS = [
+  "TikTok",
+  "Instagram",
+  "Facebook",
 ] as const;
 
-export const STAKEHOLDER_OPTIONS = [
-  "Board",
-  "Head of school",
-  "Architect",
-  "Construction manager",
-  "Athletic dept",
-  "Performing arts dept",
-  "Facilities",
-  "Parents/donors",
-  "Other",
-] as const;
+// --- Form / submission shapes (Cycle 18 redesign) ---
 
-export const DECISION_TIMELINE_OPTIONS = [
-  "Decided",
-  "Within 30 days",
-  "Within 90 days",
-  "Within 6 months",
-  "6+ months",
-  "Unknown",
-] as const;
+export interface ContactBlock {
+  /** name (matches one of school.contacts[].name), "" if none picked. */
+  selectedContactName: string;
+  /** Free text — the spreadsheet doesn't carry these, rep fills. */
+  email: string;
+  phone: string;
+  /** Always-on free text: a person not in school.contacts. */
+  metSomeoneElse: string;
+}
 
-export const HEARD_ABOUT_OPTIONS = [
-  "Existing relationship",
-  "Referral",
-  "Architect/AEC partner",
-  "Conference / trade show",
-  "Web search",
-  "Cold outreach",
-  "Unknown",
-] as const;
+export interface ProjectsNeedsBlock {
+  upcomingProjects: string;
+  currentNeeds: string;
+  /** "" = unanswered (no longer required per Cycle 18). */
+  timeline: Timeline | "";
+}
 
-export const MATERIALS_LEFT_OPTIONS = [
-  "Catalog",
-  "Spec sheets",
-  "Sample finishes",
-  "Business card",
-  "None",
-] as const;
+export interface PurchasingBlock {
+  /** A canonical option, "Other" (sentinel — Other text in companion field), or "". */
+  decisionMaker: (typeof DECISION_MAKER_OPTIONS)[number] | "Other" | "";
+  decisionMakerOther: string;
+  musicVendor: string;
+  athleticVendor: string;
+  /** Subset of DEALER_OPTIONS. Other fill-in is stored separately. */
+  dealers: string[];
+  dealersOther: string;
+  /** Free text — "Do they purchase through national contracts or co-ops?" */
+  contractsCoops: string;
+  /** Subset of FUNDING_OPTIONS. Other fill-in stored separately. */
+  funding: string[];
+  fundingOther: string;
+}
 
-// --- Form / submission shapes ---
+export interface MarketingBlock {
+  /** Subset of MARKETING_CHANNEL_OPTIONS. Other fill-in stored separately. */
+  channels: string[];
+  channelsOther: string;
+  /** Subset of SOCIAL_PLATFORM_OPTIONS. Cleared on save if "Social Media"
+   *  is not in `channels`. */
+  socialPlatforms: string[];
+  /** Free text — "What kind of trade shows or events do they attend?" */
+  tradeShows: string;
+}
 
 export interface VisitFormData {
-  priority: {
-    visitPriority: string; // required
-    projectTiming: string;
-    opportunitySize: string;
-    nextAction: string; // <= 200 chars
-  };
-  contact: {
-    name: string;
-    title: string;
-    email: string;
-    phone: string;
-    metWith: string[];
-    otherContact: string; // only when metWith includes "Other"
-  };
-  purchasing: {
-    decisionAuthority: string;
-    procurementProcess: string;
-    budgetStatus: string;
-  };
-  decisionMaking: {
-    stakeholders: string[];
-    competingVendors: string;
-    decisionTimeline: string;
-  };
-  marketing: {
-    heardAbout: string[];
-    materialsLeft: string[];
-    followUpRequested: string;
-  };
+  contact: ContactBlock;
+  projectsNeeds: ProjectsNeedsBlock;
+  purchasing: PurchasingBlock;
+  marketing: MarketingBlock;
   notes: string;
 }
 
@@ -151,36 +141,65 @@ export interface Submission extends VisitFormData {
 
 export function createEmptyForm(): VisitFormData {
   return {
-    priority: {
-      visitPriority: "",
-      projectTiming: "",
-      opportunitySize: "",
-      nextAction: "",
-    },
     contact: {
-      name: "",
-      title: "",
+      selectedContactName: "",
       email: "",
       phone: "",
-      metWith: [],
-      otherContact: "",
+      metSomeoneElse: "",
+    },
+    projectsNeeds: {
+      upcomingProjects: "",
+      currentNeeds: "",
+      timeline: "",
     },
     purchasing: {
-      decisionAuthority: "",
-      procurementProcess: "",
-      budgetStatus: "",
-    },
-    decisionMaking: {
-      stakeholders: [],
-      competingVendors: "",
-      decisionTimeline: "",
+      decisionMaker: "",
+      decisionMakerOther: "",
+      musicVendor: "",
+      athleticVendor: "",
+      dealers: [],
+      dealersOther: "",
+      contractsCoops: "",
+      funding: [],
+      fundingOther: "",
     },
     marketing: {
-      heardAbout: [],
-      materialsLeft: [],
-      followUpRequested: "",
+      channels: [],
+      channelsOther: "",
+      socialPlatforms: [],
+      tradeShows: "",
     },
     notes: "",
+  };
+}
+
+/** Cycle 18: normalize the form before save. Currently just clears
+ *  nested social platforms when "Social Media" is not selected and
+ *  trims orphan "Other" text. Called in the form's save path AND in
+ *  the API validators so client + server agree on canonical shape. */
+export function normalizeFormData(data: VisitFormData): VisitFormData {
+  const socialChecked = data.marketing.channels.includes("Social Media");
+  const otherChannelChecked = data.marketing.channels.includes("Other");
+  const otherDealerChecked = data.purchasing.dealers.includes("Other");
+  const otherFundingChecked = data.purchasing.funding.includes("Other");
+  const decisionIsOther = data.purchasing.decisionMaker === "Other";
+  return {
+    ...data,
+    purchasing: {
+      ...data.purchasing,
+      decisionMakerOther: decisionIsOther
+        ? data.purchasing.decisionMakerOther
+        : "",
+      dealersOther: otherDealerChecked ? data.purchasing.dealersOther : "",
+      fundingOther: otherFundingChecked ? data.purchasing.fundingOther : "",
+    },
+    marketing: {
+      ...data.marketing,
+      channelsOther: otherChannelChecked
+        ? data.marketing.channelsOther
+        : "",
+      socialPlatforms: socialChecked ? data.marketing.socialPlatforms : [],
+    },
   };
 }
 
@@ -201,6 +220,10 @@ export function newSubmissionId(schoolId: string): string {
 }
 
 // --- localStorage CRUD (browser-only; no-ops / [] on the server) ---
+// Cycle 5 legacy: these support a one-time backfill from the original
+// localStorage submissions key. Kept verbatim for backward compat;
+// the type cast is now structurally inaccurate for old-shape rows,
+// but the API validators (Cycle 18) will 400 any old-shape POST.
 
 export function loadAllSubmissions(): Submission[] {
   if (typeof window === "undefined") return [];
