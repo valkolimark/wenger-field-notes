@@ -6,6 +6,43 @@ Format: `## Cycle N — Title (YYYY-MM-DD)` followed by a short prose summary, t
 
 ---
 
+## Cycle 17 followup — VisitFormResolver renders skeleton until URL resolves (2026-05-22)
+
+The initial Cycle 17 fix replaced `useParams()` with
+`readUrlSegment(...)` directly inside the render. On the server side
+(no `window`), `readUrlSegment` returned the empty fallback —
+which made `schools.find()` return `undefined` and rendered "School
+not found" into the cached HTML. Reps saw "School not found" the
+moment they tapped any school offline (faster than the hydrated
+client re-render could correct it) and bounced back to the menu.
+
+**Fix:** defer the URL read to `useEffect`. The component starts
+with `schoolId: null`, renders `<FormSkeleton/>` (school-agnostic).
+After mount, `useEffect` reads `window.location.pathname` and
+sets the real schoolId; the form renders. The cached HTML is now
+the skeleton — works for every URL, no school baked in.
+
+`<EditSubmission>` and `<SubmissionDetail>` already had a loading
+state (`status === "loading"` shows a skeleton) so their version
+of the URL-bar fix was unaffected — the load callback re-runs with
+the corrected id and they show the right submission.
+
+Also bumped SW `PAGES_CACHE` v5 → v6 and `RSC_CACHE` v5 → v6 so
+existing devices abandon any cached "School not found" HTML from
+the brief initial-fix window and the new install repopulates with
+the skeleton.
+
+**Changed**
+- `<VisitFormResolver>` rewritten with `useState` + `useEffect`
+  + `<FormSkeleton/>` placeholder. Imports `FormSkeleton` from
+  `@/components/ui/skeleton`. `popstate` listener handles back/
+  forward nav (pushstate-driven nav within the page already
+  re-mounts via the App Router).
+- `src/app/sw.ts` cache versions bumped to v6.
+
+Build clean (27 routes, unchanged). tsc --noEmit clean. Live
+`public/sw.js` carries `pages-v6` + `next-rsc-v6`.
+
 ## Cycle 17 — Offline wrong-school bug fix (URL bar as source of truth) (2026-05-22)
 
 **Field report after Cycle 16:** a rep opened Brentwood online, went

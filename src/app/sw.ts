@@ -207,11 +207,11 @@ async function fallbackByAnyMatcher(
 // offline fall back to exact-match → /form/* prefix → synthetic 504
 // so the router can surface a normal error instead of the SW crashing
 // the navigation.
-// Cycle 14 v2→v3; Cycle 15 v3→v4; Cycle 16 v4→v5 so existing devices
-// re-run install with the new prefetch list (adds /submissions/__prefetch__
-// and /submissions/__prefetch__/edit) AND the redirect-skip behavior
-// that prevents login-page HTML from poisoning authed-route cache keys.
-const RSC_CACHE = "next-rsc-v5";
+// Cycle 14 v2→v3; Cycle 15 v3→v4; Cycle 16 v4→v5; Cycle 17 followup
+// v5→v6 to abandon cached /form/<sample> HTML that contained "School
+// not found" (the brief Cycle 17 server-render regression). New SW
+// install repopulates with the skeleton-rendering HTML.
+const RSC_CACHE = "next-rsc-v6";
 const rscRoute: RuntimeCaching = {
   matcher: ({ request, url }) =>
     url.origin === self.location.origin &&
@@ -245,10 +245,10 @@ const rscRoute: RuntimeCaching = {
 // Offline → exact-match → /form/* prefix → cached "/" → navy offline
 // stub. Never throw (the iOS PWA "FetchEvent.respondWith received an
 // error" we hit on the first round was this path rejecting).
-// Cycle 14 v2→v3; Cycle 15 v3→v4; Cycle 16 v4→v5 (paired with RSC bump
-// above so existing devices re-run install and abandon any login-page-
-// poisoned entries from before the redirect-skip fix).
-const PAGES_CACHE = "pages-v5";
+// Cycle 14 v2→v3; Cycle 15 v3→v4; Cycle 16 v4→v5; Cycle 17 followup
+// v5→v6 paired with the RSC bump above (abandons "School not found"
+// HTML from the brief Cycle 17 regression).
+const PAGES_CACHE = "pages-v6";
 const navRoute: RuntimeCaching = {
   matcher: ({ request, url }) =>
     request.mode === "navigate" &&
