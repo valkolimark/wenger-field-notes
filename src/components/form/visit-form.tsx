@@ -15,21 +15,21 @@ import { PhotoSheet } from "./photo-sheet";
 import {
   type VisitFormData,
   type Submission,
+  type ContactBlock,
+  type ProjectsNeedsBlock,
+  type PurchasingBlock,
+  type MarketingBlock,
   createEmptyForm,
   newSubmissionId,
   formatRelative,
   formatVisitDate,
-  VISIT_PRIORITY_OPTIONS,
-  PROJECT_TIMING_OPTIONS,
-  OPPORTUNITY_SIZE_OPTIONS,
-  MET_WITH_OPTIONS,
-  DECISION_AUTHORITY_OPTIONS,
-  PROCUREMENT_OPTIONS,
-  BUDGET_STATUS_OPTIONS,
-  STAKEHOLDER_OPTIONS,
-  DECISION_TIMELINE_OPTIONS,
-  HEARD_ABOUT_OPTIONS,
-  MATERIALS_LEFT_OPTIONS,
+  normalizeFormData,
+  TIMELINE_OPTIONS,
+  DECISION_MAKER_OPTIONS,
+  DEALER_OPTIONS,
+  FUNDING_OPTIONS,
+  MARKETING_CHANNEL_OPTIONS,
+  SOCIAL_PLATFORM_OPTIONS,
 } from "@/lib/submissions";
 import {
   loadDraft,
@@ -52,29 +52,26 @@ import {
 import { drainOnce } from "@/lib/sync";
 
 type Action =
-  | { type: "priority"; patch: Partial<VisitFormData["priority"]> }
-  | { type: "contact"; patch: Partial<VisitFormData["contact"]> }
-  | { type: "purchasing"; patch: Partial<VisitFormData["purchasing"]> }
-  | { type: "decisionMaking"; patch: Partial<VisitFormData["decisionMaking"]> }
-  | { type: "marketing"; patch: Partial<VisitFormData["marketing"]> }
+  | { type: "contact"; patch: Partial<ContactBlock> }
+  | { type: "projectsNeeds"; patch: Partial<ProjectsNeedsBlock> }
+  | { type: "purchasing"; patch: Partial<PurchasingBlock> }
+  | { type: "marketing"; patch: Partial<MarketingBlock> }
   | { type: "notes"; value: string }
   | { type: "load"; data: VisitFormData };
 
 function reducer(state: VisitFormData, action: Action): VisitFormData {
   switch (action.type) {
-    case "priority":
-      return { ...state, priority: { ...state.priority, ...action.patch } };
     case "contact":
       return { ...state, contact: { ...state.contact, ...action.patch } };
+    case "projectsNeeds":
+      return {
+        ...state,
+        projectsNeeds: { ...state.projectsNeeds, ...action.patch },
+      };
     case "purchasing":
       return {
         ...state,
         purchasing: { ...state.purchasing, ...action.patch },
-      };
-    case "decisionMaking":
-      return {
-        ...state,
-        decisionMaking: { ...state.decisionMaking, ...action.patch },
       };
     case "marketing":
       return {
@@ -92,16 +89,30 @@ function reducer(state: VisitFormData, action: Action): VisitFormData {
 // subscription hasn't returned yet on first render.
 const EMPTY_PHOTOS: LocalPhotoRow[] = [];
 
+// Cycle 18: option sets reused by the form's radio/checkbox groups.
+// The canonical lists are augmented with "Other" for the form layer
+// (the data model keeps "Other" out of the canonical arrays and stores
+// the fill-in text in a parallel `*Other` field).
+const DECISION_MAKER_WITH_OTHER = [
+  ...DECISION_MAKER_OPTIONS,
+  "Other",
+] as const;
+const DEALER_WITH_OTHER = [...DEALER_OPTIONS, "Other"] as const;
+const FUNDING_WITH_OTHER = [...FUNDING_OPTIONS, "Other"] as const;
+const MARKETING_CHANNEL_WITH_OTHER = [
+  ...MARKETING_CHANNEL_OPTIONS,
+  "Other",
+] as const;
+
 /** The editable VisitFormData carried by an existing submission, deep
  *  cloned so the reducer never mutates the loaded row. */
 function initialFormData(sub?: Submission): VisitFormData {
   if (!sub) return createEmptyForm();
   return JSON.parse(
     JSON.stringify({
-      priority: sub.priority,
       contact: sub.contact,
+      projectsNeeds: sub.projectsNeeds,
       purchasing: sub.purchasing,
-      decisionMaking: sub.decisionMaking,
       marketing: sub.marketing,
       notes: sub.notes,
     }),
@@ -134,7 +145,6 @@ export function VisitForm({
     editSubmission,
     initialFormData,
   );
-  const [priorityError, setPriorityError] = useState<string>("");
   const [draftAt, setDraftAt] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
@@ -142,25 +152,18 @@ export function VisitForm({
 
   // Cycle 13: stable submissionId so photos enqueued to Dexie before
   // save can reference a known parent across refreshes/force-quits.
-  // - new visit: minted lazily (newSubmissionId(school.id)); persisted
-  //   onto the draft so a refresh restores it.
-  // - edit:     fixed to editSubmission.id.
   const [submissionId, setSubmissionId] = useState<string>(() =>
     editSubmission ? editSubmission.id : "",
   );
   const [activePhotoId, setActivePhotoId] = useState<string | null>(null);
   const warnedAtThresholdRef = useRef(false);
 
-  const priorityRef = useRef<HTMLDivElement>(null);
   const baselineRef = useRef<string>(
     JSON.stringify(initialFormData(editSubmission)),
   );
   const restoredRef = useRef(false);
 
   // Restore an existing draft once (per rep + school) — new-visit only.
-  // Cycle 12: drafts now live in IndexedDB (Dexie); loader is async.
-  // Cycle 13: if the draft carries a submissionId, adopt it; otherwise
-  //   mint one (will be persisted on the next autosave).
   useEffect(() => {
     if (isEdit || restoredRef.current || !repId) return;
     restoredRef.current = true;
@@ -182,10 +185,7 @@ export function VisitForm({
     };
   }, [isEdit, repId, school.id]);
 
-  // Cycle 13: live photo list for this submission (Dexie subscription).
-  // useLiveQuery re-runs when the photos table changes; we pass
-  // `submissionId` in deps so the query rebinds when it becomes
-  // available after the draft restore.
+  // Live photo list for this submission (Dexie subscription).
   const livePhotos = useLiveQuery(
     () =>
       submissionId
@@ -199,16 +199,9 @@ export function VisitForm({
   );
 
   const isDirty = JSON.stringify(form) !== baselineRef.current;
-  // Cycle 13: "dirty" for the back-confirm now also covers any local
-  // photos captured this session. Server-side existing photos (synced
-  // submissions in edit mode) don't live in Dexie so they don't trip
-  // the prompt.
   const hasLocalPhotos = (livePhotos?.length ?? 0) > 0;
 
-  // Debounced draft autosave (500ms per Cycle 12) — new-visit only;
-  // never in edit mode. Fire-and-forget; Dexie put is async.
-  // Cycle 13: now also persists `submissionId` onto the draft so a
-  // refresh restores the same identity.
+  // Debounced draft autosave (500ms) — new-visit only.
   useEffect(() => {
     if (isEdit || !repId || !submissionId || !isDirty || saved) return;
     const t = setTimeout(() => {
@@ -233,8 +226,6 @@ export function VisitForm({
     dispatch({ type: "load", data: empty });
     baselineRef.current = JSON.stringify(empty);
     setDraftAt(null);
-    // Mint a fresh submissionId so subsequent capture doesn't latch
-    // onto the abandoned id.
     setSubmissionId(newSubmissionId(school.id));
     warnedAtThresholdRef.current = false;
   }
@@ -310,37 +301,18 @@ export function VisitForm({
     await deleteLocalPhoto(id);
   }
 
-  // If `activePhotoId` references a photo that was just deleted from
-  // Dexie, `activePhoto` is undefined and the sheet simply unmounts —
-  // the stale id is harmless (next open replaces it).
   const activePhoto =
     activePhotoId != null
       ? (livePhotos ?? []).find((p) => p.id === activePhotoId) ?? null
       : null;
 
-  function handleMetWith(next: string[]) {
-    dispatch({
-      type: "contact",
-      patch: next.includes("Other")
-        ? { metWith: next }
-        : { metWith: next, otherContact: "" },
-    });
-  }
-
+  // Cycle 18: no required fields (priority block is gone — cold calls
+  // may capture very little). Save always enabled; normalize the form
+  // before persisting so nested socials are cleared when Social Media
+  // isn't checked + orphan Other text is trimmed.
   async function save(then: "list" | "map") {
-    if (!form.priority.visitPriority) {
-      setPriorityError("Please set visit priority");
-      priorityRef.current?.scrollIntoView({
-        behavior: "smooth",
-        block: "start",
-      });
-      return;
-    }
     if (saving) return;
     if (!repId) {
-      // Cycle 12: surface (don't silently swallow) the case where the
-      // session hasn't loaded — e.g. /api/auth/session failed offline
-      // before the SW had a cached copy.
       setSaveError(
         "Couldn't read your session — open the app online once and try again.",
       );
@@ -349,18 +321,12 @@ export function VisitForm({
     setSaveError(null);
     setSaving(true);
 
+    const normalized = normalizeFormData(form);
+
     // --- Edit branch -------------------------------------------------
-    // Pending row → Dexie update (identity locked; sync engine has not
-    //   seen it yet so this is safe and offline-capable).
-    // Synced row → PATCH /api/submissions/[id] (Cycle 10 behavior).
-    // Mid-sync race (pending → syncing/synced between page load and
-    //   save) is detected by updatePendingContent returning
-    //   {ok:false, reason:"not-pending"}; we redirect to the online
-    //   edit URL with a `?just-synced=1` marker that EditSubmission
-    //   reads to bypass Dexie and re-fetch from the server.
     if (isEdit && editSubmission) {
       if (isPendingEdit) {
-        const r = await updatePendingContent(editSubmission.id, form);
+        const r = await updatePendingContent(editSubmission.id, normalized);
         if (!r.ok && r.reason === "not-pending") {
           setSaving(false);
           success("This visit just synced — opening online edit");
@@ -391,7 +357,7 @@ export function VisitForm({
           {
             method: "PATCH",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ ...editSubmission, ...form }),
+            body: JSON.stringify({ ...editSubmission, ...normalized }),
           },
         );
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
@@ -412,11 +378,6 @@ export function VisitForm({
     }
 
     // --- New-visit branch (Cycle 12: local-first) --------------------
-    // Write to the Dexie pending queue; the sync engine drains it when
-    // /api/health says we're online. The row appears in My Submissions
-    // immediately via the useLiveQuery merge.
-    // Cycle 13: use the stable submissionId we minted up-front so any
-    // photos already captured for this visit reference this same row.
     const submission: Submission = {
       id: submissionId || newSubmissionId(school.id),
       schoolId: school.id,
@@ -424,7 +385,7 @@ export function VisitForm({
       repId,
       repName,
       visitDate: new Date().toISOString(),
-      ...form,
+      ...normalized,
     };
 
     try {
@@ -437,11 +398,7 @@ export function VisitForm({
       return;
     }
 
-    // Kick the sync engine so an online rep sees the row flip to synced
-    // within a couple of seconds, not on the next 60s tick. Offline,
-    // the ping fails and the row stays pending for the next trigger.
     void drainOnce();
-
     void clearDraft(repId, school.id);
     setSaved(true);
     success("Visit saved");
@@ -450,6 +407,19 @@ export function VisitForm({
       then === "map" ? 600 : 1100,
     );
   }
+
+  // Local toggle helper for multi-select arrays that may also carry "Other".
+  function toggle(arr: string[], value: string): string[] {
+    return arr.includes(value)
+      ? arr.filter((v) => v !== value)
+      : [...arr, value];
+  }
+
+  const decisionIsOther = form.purchasing.decisionMaker === "Other";
+  const dealersOtherChecked = form.purchasing.dealers.includes("Other");
+  const fundingOtherChecked = form.purchasing.funding.includes("Other");
+  const channelsOtherChecked = form.marketing.channels.includes("Other");
+  const socialChecked = form.marketing.channels.includes("Social Media");
 
   return (
     <div className="pb-44 md:pb-40">
@@ -491,177 +461,237 @@ export function VisitForm({
         </div>
       )}
 
-      {/* --- Priority block (warm-accented, restrained) --- */}
-      <div
-        ref={priorityRef}
-        className="mt-5 scroll-mt-24 rounded-2xl border border-brand-warm/30 border-l-4 border-l-brand-warm bg-brand-warm-soft/40 px-4 py-5"
-      >
-        <p className="text-xs font-semibold uppercase tracking-wide text-brand-warm">
-          Priority
+      {/* Cycle 18: contact-first block. NOT collapsible — it's the
+          primary entry point and should be the first thing the rep
+          touches. */}
+      <section className="mt-5 rounded-2xl border border-black/8 bg-white px-4 py-5 space-y-5">
+        <p className="text-xs font-semibold uppercase tracking-wide text-brand-navy/55">
+          Contact
         </p>
-        <div className="mt-4 space-y-5">
-          <RadioGroup
-            label="Visit priority"
-            name="visitPriority"
-            required
-            options={VISIT_PRIORITY_OPTIONS}
-            value={form.priority.visitPriority}
-            onChange={(v) => {
-              setPriorityError("");
-              dispatch({ type: "priority", patch: { visitPriority: v } });
-            }}
-            error={priorityError}
-          />
-          <RadioGroup
-            label="Project timing"
-            name="projectTiming"
-            options={PROJECT_TIMING_OPTIONS}
-            value={form.priority.projectTiming}
-            onChange={(v) =>
-              dispatch({ type: "priority", patch: { projectTiming: v } })
-            }
-          />
-          <RadioGroup
-            label="Estimated opportunity size"
-            name="opportunitySize"
-            options={OPPORTUNITY_SIZE_OPTIONS}
-            value={form.priority.opportunitySize}
-            onChange={(v) =>
-              dispatch({ type: "priority", patch: { opportunitySize: v } })
-            }
-          />
-          <TextField
-            label="Next action"
-            value={form.priority.nextAction}
-            maxLength={200}
-            placeholder="The next concrete step"
-            onChange={(v) =>
-              dispatch({ type: "priority", patch: { nextAction: v } })
-            }
-          />
+
+        <div>
+          <label className="block">
+            <span className="block text-sm font-medium text-brand-navy">
+              Who did you meet with?
+            </span>
+            <select
+              value={form.contact.selectedContactName}
+              onChange={(e) =>
+                dispatch({
+                  type: "contact",
+                  patch: { selectedContactName: e.target.value },
+                })
+              }
+              className="mt-1.5 h-11 w-full rounded-xl border border-black/10 bg-white px-3 text-brand-navy outline-none transition-colors focus-visible:border-brand-navy/40 focus-visible:ring-2 focus-visible:ring-brand-navy/15"
+            >
+              <option value="">
+                {school.contacts.length === 0
+                  ? "No contacts on file for this school"
+                  : "Pick a person…"}
+              </option>
+              {school.contacts.map((c) => (
+                <option key={`${c.role}-${c.name}`} value={c.name}>
+                  {c.name} — {c.role}
+                </option>
+              ))}
+            </select>
+          </label>
+          {school.contacts.length === 0 && (
+            <p className="mt-1 text-xs text-brand-navy/45">
+              Use the &quot;Met with someone else&quot; field below.
+            </p>
+          )}
         </div>
-      </div>
+
+        <TextField
+          label="Email"
+          type="email"
+          inputMode="email"
+          value={form.contact.email}
+          onChange={(v) =>
+            dispatch({ type: "contact", patch: { email: v } })
+          }
+        />
+        <TextField
+          label="Phone"
+          type="tel"
+          inputMode="tel"
+          value={form.contact.phone}
+          onChange={(v) =>
+            dispatch({ type: "contact", patch: { phone: v } })
+          }
+        />
+        <TextField
+          label="Met with someone else"
+          value={form.contact.metSomeoneElse}
+          placeholder="Name (and role, if you'd like)"
+          onChange={(v) =>
+            dispatch({ type: "contact", patch: { metSomeoneElse: v } })
+          }
+        />
+      </section>
 
       <div className="mt-5 space-y-4">
-        <CollapsibleSection title="Contact">
-          <TextField
-            label="Primary contact name"
-            value={form.contact.name}
-            onChange={(v) => dispatch({ type: "contact", patch: { name: v } })}
-          />
-          <TextField
-            label="Title / role"
-            value={form.contact.title}
+        <CollapsibleSection title="Projects / Needs">
+          <TextArea
+            label="Do they have any upcoming projects planned?"
+            rows={3}
+            value={form.projectsNeeds.upcomingProjects}
             onChange={(v) =>
-              dispatch({ type: "contact", patch: { title: v } })
+              dispatch({
+                type: "projectsNeeds",
+                patch: { upcomingProjects: v },
+              })
             }
           />
-          <TextField
-            label="Email"
-            type="email"
-            inputMode="email"
-            value={form.contact.email}
+          <TextArea
+            label="Do they have any current needs we can help with?"
+            rows={3}
+            value={form.projectsNeeds.currentNeeds}
             onChange={(v) =>
-              dispatch({ type: "contact", patch: { email: v } })
+              dispatch({
+                type: "projectsNeeds",
+                patch: { currentNeeds: v },
+              })
             }
           />
-          <TextField
-            label="Phone"
-            type="tel"
-            inputMode="tel"
-            value={form.contact.phone}
+          <RadioGroup
+            label="If current needs, what is their timeline?"
+            name="timeline"
+            options={TIMELINE_OPTIONS}
+            value={form.projectsNeeds.timeline}
             onChange={(v) =>
-              dispatch({ type: "contact", patch: { phone: v } })
-            }
-          />
-          <CheckboxGroup
-            label="Met with today"
-            options={MET_WITH_OPTIONS}
-            values={form.contact.metWith}
-            onChange={handleMetWith}
-          />
-          <TextField
-            label="Other contact"
-            value={form.contact.otherContact}
-            disabled={!form.contact.metWith.includes("Other")}
-            hint={
-              form.contact.metWith.includes("Other")
-                ? undefined
-                : 'Enable by checking "Other" above'
-            }
-            onChange={(v) =>
-              dispatch({ type: "contact", patch: { otherContact: v } })
+              dispatch({
+                type: "projectsNeeds",
+                patch: { timeline: v as ProjectsNeedsBlock["timeline"] },
+              })
             }
           />
         </CollapsibleSection>
 
         <CollapsibleSection title="Purchasing">
           <RadioGroup
-            label="Decision authority"
-            name="decisionAuthority"
-            options={DECISION_AUTHORITY_OPTIONS}
-            value={form.purchasing.decisionAuthority}
+            label="Who makes the decisions as far as athletics or music goes?"
+            name="decisionMaker"
+            options={DECISION_MAKER_WITH_OTHER}
+            value={form.purchasing.decisionMaker}
             onChange={(v) =>
               dispatch({
                 type: "purchasing",
-                patch: { decisionAuthority: v },
-              })
-            }
-          />
-          <RadioGroup
-            label="Procurement process"
-            name="procurementProcess"
-            options={PROCUREMENT_OPTIONS}
-            value={form.purchasing.procurementProcess}
-            onChange={(v) =>
-              dispatch({
-                type: "purchasing",
-                patch: { procurementProcess: v },
-              })
-            }
-          />
-          <RadioGroup
-            label="Budget status"
-            name="budgetStatus"
-            options={BUDGET_STATUS_OPTIONS}
-            value={form.purchasing.budgetStatus}
-            onChange={(v) =>
-              dispatch({ type: "purchasing", patch: { budgetStatus: v } })
-            }
-          />
-        </CollapsibleSection>
-
-        <CollapsibleSection title="Decision-making">
-          <CheckboxGroup
-            label="Stakeholders involved"
-            options={STAKEHOLDER_OPTIONS}
-            values={form.decisionMaking.stakeholders}
-            onChange={(next) =>
-              dispatch({
-                type: "decisionMaking",
-                patch: { stakeholders: next },
+                patch: {
+                  decisionMaker:
+                    v as PurchasingBlock["decisionMaker"],
+                  ...(v === "Other"
+                    ? {}
+                    : { decisionMakerOther: "" }),
+                },
               })
             }
           />
           <TextField
-            label="Competing vendors mentioned"
-            value={form.decisionMaking.competingVendors}
+            label="Other decision-maker"
+            value={form.purchasing.decisionMakerOther}
+            disabled={!decisionIsOther}
+            hint={
+              decisionIsOther
+                ? undefined
+                : 'Enable by selecting "Other" above'
+            }
             onChange={(v) =>
               dispatch({
-                type: "decisionMaking",
-                patch: { competingVendors: v },
+                type: "purchasing",
+                patch: { decisionMakerOther: v },
               })
             }
           />
-          <RadioGroup
-            label="Decision timeline"
-            name="decisionTimeline"
-            options={DECISION_TIMELINE_OPTIONS}
-            value={form.decisionMaking.decisionTimeline}
+          <TextField
+            label="What vendor do they currently use to purchase music equipment?"
+            value={form.purchasing.musicVendor}
+            onChange={(v) =>
+              dispatch({ type: "purchasing", patch: { musicVendor: v } })
+            }
+          />
+          <TextField
+            label="What vendor do they currently use to purchase athletic equipment?"
+            value={form.purchasing.athleticVendor}
             onChange={(v) =>
               dispatch({
-                type: "decisionMaking",
-                patch: { decisionTimeline: v },
+                type: "purchasing",
+                patch: { athleticVendor: v },
+              })
+            }
+          />
+          <CheckboxGroup
+            label="Do they use dealers? If so, who?"
+            options={DEALER_WITH_OTHER}
+            values={form.purchasing.dealers}
+            onChange={(next) =>
+              dispatch({
+                type: "purchasing",
+                patch: {
+                  dealers: next,
+                  ...(next.includes("Other")
+                    ? {}
+                    : { dealersOther: "" }),
+                },
+              })
+            }
+          />
+          <TextField
+            label="Other dealer"
+            value={form.purchasing.dealersOther}
+            disabled={!dealersOtherChecked}
+            hint={
+              dealersOtherChecked
+                ? undefined
+                : 'Enable by checking "Other" above'
+            }
+            onChange={(v) =>
+              dispatch({
+                type: "purchasing",
+                patch: { dealersOther: v },
+              })
+            }
+          />
+          <TextField
+            label="Do they purchase through national contracts or co-ops? If yes, capture what they use."
+            value={form.purchasing.contractsCoops}
+            onChange={(v) =>
+              dispatch({
+                type: "purchasing",
+                patch: { contractsCoops: v },
+              })
+            }
+          />
+          <CheckboxGroup
+            label="How are projects or purchases funded?"
+            options={FUNDING_WITH_OTHER}
+            values={form.purchasing.funding}
+            onChange={(next) =>
+              dispatch({
+                type: "purchasing",
+                patch: {
+                  funding: next,
+                  ...(next.includes("Other")
+                    ? {}
+                    : { fundingOther: "" }),
+                },
+              })
+            }
+          />
+          <TextField
+            label="Other funding source"
+            value={form.purchasing.fundingOther}
+            disabled={!fundingOtherChecked}
+            hint={
+              fundingOtherChecked
+                ? undefined
+                : 'Enable by checking "Other" above'
+            }
+            onChange={(v) =>
+              dispatch({
+                type: "purchasing",
+                patch: { fundingOther: v },
               })
             }
           />
@@ -669,29 +699,60 @@ export function VisitForm({
 
         <CollapsibleSection title="Marketing">
           <CheckboxGroup
-            label="How did they hear about Wenger?"
-            options={HEARD_ABOUT_OPTIONS}
-            values={form.marketing.heardAbout}
+            label="How do they prefer to consume marketing information?"
+            options={MARKETING_CHANNEL_WITH_OTHER}
+            values={form.marketing.channels}
             onChange={(next) =>
-              dispatch({ type: "marketing", patch: { heardAbout: next } })
+              dispatch({
+                type: "marketing",
+                patch: {
+                  channels: next,
+                  ...(next.includes("Other")
+                    ? {}
+                    : { channelsOther: "" }),
+                  ...(next.includes("Social Media")
+                    ? {}
+                    : { socialPlatforms: [] }),
+                },
+              })
             }
           />
-          <CheckboxGroup
-            label="Materials left behind"
-            options={MATERIALS_LEFT_OPTIONS}
-            values={form.marketing.materialsLeft}
-            onChange={(next) =>
-              dispatch({ type: "marketing", patch: { materialsLeft: next } })
-            }
-          />
+          {socialChecked && (
+            <div className="rounded-xl bg-brand-navy/[0.03] p-3">
+              <CheckboxGroup
+                label="Which platforms?"
+                options={SOCIAL_PLATFORM_OPTIONS}
+                values={form.marketing.socialPlatforms}
+                onChange={(next) =>
+                  dispatch({
+                    type: "marketing",
+                    patch: { socialPlatforms: next },
+                  })
+                }
+              />
+            </div>
+          )}
           <TextField
-            label="Follow-up materials requested"
-            value={form.marketing.followUpRequested}
+            label="Other channel"
+            value={form.marketing.channelsOther}
+            disabled={!channelsOtherChecked}
+            hint={
+              channelsOtherChecked
+                ? undefined
+                : 'Enable by checking "Other" above'
+            }
             onChange={(v) =>
               dispatch({
                 type: "marketing",
-                patch: { followUpRequested: v },
+                patch: { channelsOther: v },
               })
+            }
+          />
+          <TextField
+            label="What kind of trade shows or events do they attend?"
+            value={form.marketing.tradeShows}
+            onChange={(v) =>
+              dispatch({ type: "marketing", patch: { tradeShows: v } })
             }
           />
         </CollapsibleSection>
