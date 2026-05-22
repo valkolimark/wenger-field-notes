@@ -22,8 +22,12 @@ import { AdminNav } from "./admin-nav";
 
 type Row = Submission & { createdAt: string };
 
-function shortPriority(v: string) {
-  return v?.split("—")[0]?.trim() || v || "—";
+// Cycle 18: priority gone — admin row header used to show a small
+// priority chip; replaced with a timeline chip pulled from the new
+// projects_needs block (only renders when the rep captured a timeline).
+function timelineChip(row: Row): string | null {
+  const t = row.projectsNeeds.timeline?.trim();
+  return t || null;
 }
 function fmt(iso: string) {
   const d = new Date(iso);
@@ -342,9 +346,11 @@ export function AdminSubmissions() {
                       <span className="truncate text-lg text-brand-navy">
                         {s.schoolName}
                       </span>
-                      <span className="shrink-0 rounded-full bg-brand-navy/8 px-2 py-0.5 text-[11px] font-medium text-brand-navy">
-                        {shortPriority(s.priority.visitPriority)}
-                      </span>
+                      {timelineChip(s) && (
+                        <span className="shrink-0 rounded-full bg-brand-navy/8 px-2 py-0.5 text-[11px] font-medium text-brand-navy">
+                          {timelineChip(s)}
+                        </span>
+                      )}
                     </div>
                     <p className="mt-0.5 text-xs text-brand-navy/50">
                       {s.repName} ({s.repId}) · {fmt(s.visitDate)}
@@ -362,48 +368,93 @@ export function AdminSubmissions() {
                   <div className="border-t border-black/8 px-4 py-4">
                     <dl className="grid gap-x-6 sm:grid-cols-2">
                       <DetailRow
-                        label="Visit priority"
-                        value={s.priority.visitPriority}
-                      />
-                      <DetailRow
-                        label="Project timing"
-                        value={s.priority.projectTiming}
-                      />
-                      <DetailRow
-                        label="Opportunity size"
-                        value={s.priority.opportunitySize}
-                      />
-                      <DetailRow
-                        label="Next action"
-                        value={s.priority.nextAction}
-                      />
-                      <DetailRow
-                        label="Contact"
-                        value={[s.contact.name, s.contact.title]
-                          .filter(Boolean)
-                          .join(" · ")}
+                        label="Met with"
+                        value={s.contact.selectedContactName}
                       />
                       <DetailRow
                         label="Contact email"
                         value={s.contact.email}
                       />
                       <DetailRow
-                        label="Met with"
-                        value={(s.contact.metWith || []).join(", ")}
+                        label="Contact phone"
+                        value={s.contact.phone}
                       />
                       <DetailRow
-                        label="Budget status"
-                        value={s.purchasing.budgetStatus}
+                        label="Met with someone else"
+                        value={s.contact.metSomeoneElse}
                       />
                       <DetailRow
-                        label="Decision timeline"
-                        value={s.decisionMaking.decisionTimeline}
+                        label="Upcoming projects"
+                        value={s.projectsNeeds.upcomingProjects}
                       />
                       <DetailRow
-                        label="Stakeholders"
-                        value={(
-                          s.decisionMaking.stakeholders || []
-                        ).join(", ")}
+                        label="Current needs"
+                        value={s.projectsNeeds.currentNeeds}
+                      />
+                      <DetailRow
+                        label="Timeline"
+                        value={s.projectsNeeds.timeline}
+                      />
+                      <DetailRow
+                        label="Decision-maker"
+                        value={
+                          s.purchasing.decisionMaker === "Other"
+                            ? `Other: ${s.purchasing.decisionMakerOther}`
+                            : s.purchasing.decisionMaker
+                        }
+                      />
+                      <DetailRow
+                        label="Music vendor"
+                        value={s.purchasing.musicVendor}
+                      />
+                      <DetailRow
+                        label="Athletic vendor"
+                        value={s.purchasing.athleticVendor}
+                      />
+                      <DetailRow
+                        label="Dealers"
+                        value={[
+                          ...(s.purchasing.dealers || []).filter(
+                            (v) => v !== "Other",
+                          ),
+                          s.purchasing.dealersOther
+                            ? `Other: ${s.purchasing.dealersOther}`
+                            : "",
+                        ]
+                          .filter(Boolean)
+                          .join(", ")}
+                      />
+                      <DetailRow
+                        label="Funding"
+                        value={[
+                          ...(s.purchasing.funding || []).filter(
+                            (v) => v !== "Other",
+                          ),
+                          s.purchasing.fundingOther
+                            ? `Other: ${s.purchasing.fundingOther}`
+                            : "",
+                        ]
+                          .filter(Boolean)
+                          .join(", ")}
+                      />
+                      <DetailRow
+                        label="Channels"
+                        value={[
+                          ...(s.marketing.channels || []).filter(
+                            (v) => v !== "Other",
+                          ),
+                          s.marketing.channelsOther
+                            ? `Other: ${s.marketing.channelsOther}`
+                            : "",
+                        ]
+                          .filter(Boolean)
+                          .join(", ")}
+                      />
+                      <DetailRow
+                        label="Social platforms"
+                        value={(s.marketing.socialPlatforms || []).join(
+                          ", ",
+                        )}
                       />
                     </dl>
                     {s.notes?.trim() && (

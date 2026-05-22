@@ -34,6 +34,21 @@ function Row({ label, value }: { label: string; value: string }) {
 
 const list = (arr: string[]) => (arr.length ? arr.join(", ") : DASH);
 
+// Cycle 18: join canonical selections + "Other" fill-in into a single
+// readable string for the detail view (the data model keeps them
+// parallel; this is presentation-only).
+function joinList(canonical: string[], other: string): string {
+  const items = canonical.filter((v) => v !== "Other");
+  if (other.trim()) items.push(`Other: ${other.trim()}`);
+  return items.length ? items.join(", ") : DASH;
+}
+function joinDecision(maker: string, other: string): string {
+  if (maker === "Other") {
+    return other.trim() ? `Other: ${other.trim()}` : "Other";
+  }
+  return maker || DASH;
+}
+
 type Status = "loading" | "ok" | "notfound" | "error";
 
 export function SubmissionDetail({ id: idFromProps }: { id: string }) {
@@ -216,61 +231,72 @@ export function SubmissionDetail({ id: idFromProps }: { id: string }) {
         </Button>
       </div>
 
-      {/* Priority block — read-only, mirrors the form's warm distinction */}
-      <div className="mt-5 rounded-2xl border border-brand-warm/30 border-l-4 border-l-brand-warm bg-brand-warm-soft/40 px-4 py-5">
-        <p className="text-xs font-semibold uppercase tracking-wide text-brand-warm">
-          Priority
+      {/* Cycle 18: contact-first read-only block (matches the form's
+          contact-first layout — no priority block anymore). */}
+      <section className="mt-5 rounded-2xl border border-black/8 bg-white px-4 py-5">
+        <p className="text-xs font-semibold uppercase tracking-wide text-brand-navy/55">
+          Contact
         </p>
         <dl className="mt-4 space-y-4">
-          <Row label="Visit priority" value={s.priority.visitPriority} />
-          <Row label="Project timing" value={s.priority.projectTiming} />
           <Row
-            label="Estimated opportunity size"
-            value={s.priority.opportunitySize}
+            label="Met with"
+            value={s.contact.selectedContactName}
           />
-          <Row label="Next action" value={s.priority.nextAction} />
+          <Row label="Email" value={s.contact.email} />
+          <Row label="Phone" value={s.contact.phone} />
+          <Row
+            label="Met with someone else"
+            value={s.contact.metSomeoneElse}
+          />
         </dl>
-      </div>
+      </section>
 
       <div className="mt-5 space-y-4">
-        <CollapsibleSection title="Contact">
+        <CollapsibleSection title="Projects / Needs">
           <dl className="space-y-4">
-            <Row label="Primary contact name" value={s.contact.name} />
-            <Row label="Title / role" value={s.contact.title} />
-            <Row label="Email" value={s.contact.email} />
-            <Row label="Phone" value={s.contact.phone} />
-            <Row label="Met with today" value={list(s.contact.metWith)} />
-            <Row label="Other contact" value={s.contact.otherContact} />
+            <Row
+              label="Upcoming projects"
+              value={s.projectsNeeds.upcomingProjects}
+            />
+            <Row
+              label="Current needs"
+              value={s.projectsNeeds.currentNeeds}
+            />
+            <Row label="Timeline" value={s.projectsNeeds.timeline} />
           </dl>
         </CollapsibleSection>
 
         <CollapsibleSection title="Purchasing">
           <dl className="space-y-4">
             <Row
-              label="Decision authority"
-              value={s.purchasing.decisionAuthority}
+              label="Who makes the decisions"
+              value={joinDecision(
+                s.purchasing.decisionMaker,
+                s.purchasing.decisionMakerOther,
+              )}
+            />
+            <Row label="Music vendor" value={s.purchasing.musicVendor} />
+            <Row
+              label="Athletic vendor"
+              value={s.purchasing.athleticVendor}
             />
             <Row
-              label="Procurement process"
-              value={s.purchasing.procurementProcess}
-            />
-            <Row label="Budget status" value={s.purchasing.budgetStatus} />
-          </dl>
-        </CollapsibleSection>
-
-        <CollapsibleSection title="Decision-making">
-          <dl className="space-y-4">
-            <Row
-              label="Stakeholders involved"
-              value={list(s.decisionMaking.stakeholders)}
+              label="Dealers"
+              value={joinList(
+                s.purchasing.dealers,
+                s.purchasing.dealersOther,
+              )}
             />
             <Row
-              label="Competing vendors mentioned"
-              value={s.decisionMaking.competingVendors}
+              label="National contracts / co-ops"
+              value={s.purchasing.contractsCoops}
             />
             <Row
-              label="Decision timeline"
-              value={s.decisionMaking.decisionTimeline}
+              label="Funding"
+              value={joinList(
+                s.purchasing.funding,
+                s.purchasing.fundingOther,
+              )}
             />
           </dl>
         </CollapsibleSection>
@@ -278,16 +304,19 @@ export function SubmissionDetail({ id: idFromProps }: { id: string }) {
         <CollapsibleSection title="Marketing">
           <dl className="space-y-4">
             <Row
-              label="How did they hear about Wenger?"
-              value={list(s.marketing.heardAbout)}
+              label="Preferred channels"
+              value={joinList(
+                s.marketing.channels,
+                s.marketing.channelsOther,
+              )}
             />
             <Row
-              label="Materials left behind"
-              value={list(s.marketing.materialsLeft)}
+              label="Social platforms"
+              value={list(s.marketing.socialPlatforms)}
             />
             <Row
-              label="Follow-up materials requested"
-              value={s.marketing.followUpRequested}
+              label="Trade shows / events"
+              value={s.marketing.tradeShows}
             />
           </dl>
         </CollapsibleSection>

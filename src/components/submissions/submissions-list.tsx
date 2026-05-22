@@ -20,8 +20,20 @@ const LOCATION_BY_ID = new Map(
   schools.map((s) => [s.id, s.location.split("\n")[0]?.trim() ?? ""]),
 );
 
-function priorityShort(visitPriority: string): string {
-  return visitPriority.split("—")[0]?.trim() || visitPriority || "—";
+// Cycle 18: priority is gone. The row preview now leads with whichever
+// signal is most informative — currentNeeds > upcomingProjects > a
+// short notes excerpt > "Visit logged" placeholder.
+function rowPreview(s: {
+  projectsNeeds: { currentNeeds: string; upcomingProjects: string };
+  notes: string;
+}): string {
+  const need = s.projectsNeeds.currentNeeds.trim();
+  if (need) return need;
+  const proj = s.projectsNeeds.upcomingProjects.trim();
+  if (proj) return proj;
+  const note = s.notes.trim();
+  if (note) return note;
+  return "Visit logged";
 }
 
 export function SubmissionsList() {
@@ -121,9 +133,6 @@ export function SubmissionsList() {
                     <h2 className="truncate text-lg text-brand-navy">
                       {s.schoolName}
                     </h2>
-                    <span className="shrink-0 rounded-full bg-brand-navy/8 px-2 py-0.5 text-[11px] font-medium text-brand-navy">
-                      {priorityShort(s.priority.visitPriority)}
-                    </span>
                     {s.isPending && (
                       <span
                         className="shrink-0 rounded-full border border-brand-warm/40 bg-brand-warm-soft/60 px-2 py-0.5 text-[11px] font-medium text-brand-warm"
@@ -139,11 +148,9 @@ export function SubmissionsList() {
                       : ""}
                     {formatVisitDate(s.visitDate)}
                   </p>
-                  {s.notes.trim() && (
-                    <p className="mt-1.5 truncate text-sm text-brand-navy/65">
-                      {s.notes}
-                    </p>
-                  )}
+                  <p className="mt-1.5 truncate text-sm text-brand-navy/65">
+                    {rowPreview(s)}
+                  </p>
                 </div>
                 <ChevronRight
                   size={18}

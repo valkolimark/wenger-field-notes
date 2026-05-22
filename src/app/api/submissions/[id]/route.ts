@@ -2,7 +2,11 @@ import { NextResponse } from "next/server";
 import { eq } from "drizzle-orm";
 import { db } from "@/lib/db/client";
 import { submissions } from "@/lib/db/schema";
-import type { Submission } from "@/lib/submissions";
+import {
+  type Submission,
+  createEmptyForm,
+  normalizeFormData,
+} from "@/lib/submissions";
 import { authorizeForSubmission } from "@/lib/submission-auth";
 
 export const runtime = "nodejs";
@@ -44,15 +48,22 @@ export async function PATCH(
     if (!gate.ok) return gate.res;
 
     const body = (await req.json()) as Partial<Submission>;
-    if (!body.priority?.visitPriority) {
-      return NextResponse.json(
-        {
-          error:
-            "Couldn't save this visit — missing priority.visitPriority.",
-        },
-        { status: 400 },
-      );
-    }
+
+    // Cycle 18: no required fields. Merge the partial body onto an
+    // empty form so any missing block falls back to default empties
+    // (same approach as POST). Identity stays immutable — the gate
+    // row already carries the canonical id / repId / schoolId.
+    const empty = createEmptyForm();
+    const merged = normalizeFormData({
+      contact: { ...empty.contact, ...(body.contact ?? {}) },
+      projectsNeeds: {
+        ...empty.projectsNeeds,
+        ...(body.projectsNeeds ?? {}),
+      },
+      purchasing: { ...empty.purchasing, ...(body.purchasing ?? {}) },
+      marketing: { ...empty.marketing, ...(body.marketing ?? {}) },
+      notes: body.notes ?? "",
+    });
 
     // The visit form has no date control, so it round-trips the original
     // logged date; only overwrite visitDate if a valid one is supplied.
@@ -74,12 +85,11 @@ export async function PATCH(
     const updated = await db
       .update(submissions)
       .set({
-        priority: body.priority!,
-        contact: body.contact!,
-        purchasing: body.purchasing!,
-        decisionMaking: body.decisionMaking!,
-        marketing: body.marketing!,
-        notes: body.notes ?? "",
+        contact: merged.contact,
+        projectsNeeds: merged.projectsNeeds,
+        purchasing: merged.purchasing,
+        marketing: merged.marketing,
+        notes: merged.notes,
         visitDate,
         updatedAt: new Date(),
       })

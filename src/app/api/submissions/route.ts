@@ -3,12 +3,20 @@ import { desc, eq } from "drizzle-orm";
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db/client";
 import { submissions, type InsertSubmission } from "@/lib/db/schema";
-import type { Submission } from "@/lib/submissions";
+import {
+  type Submission,
+  createEmptyForm,
+  normalizeFormData,
+} from "@/lib/submissions";
 
 export const runtime = "nodejs";
 
 // POST /api/submissions — rep identity comes from the session, never the
 // client body (Cycle 6: resolves the Cycle 5 server-trust TODO).
+// Cycle 18: no required form fields anymore (priority block is gone —
+// cold calls may capture very little). Only identity scaffolding is
+// required: id, schoolId, schoolName, visitDate. Block shapes are
+// merged with empty defaults so a sparse POST still succeeds.
 export async function POST(req: Request) {
   try {
     const session = await auth();
@@ -22,7 +30,6 @@ export async function POST(req: Request) {
     if (!body.schoolId) missing.push("schoolId");
     if (!body.schoolName) missing.push("schoolName");
     if (!body.visitDate) missing.push("visitDate");
-    if (!body.priority?.visitPriority) missing.push("priority.visitPriority");
     if (missing.length > 0) {
       return NextResponse.json(
         { error: `Couldn't save this visit — missing ${missing.join(", ")}.` },
@@ -38,6 +45,23 @@ export async function POST(req: Request) {
       );
     }
 
+    // Cycle 18: build a complete VisitFormData by merging the partial
+    // body onto an empty form (so any missing block falls back to its
+    // default empty shape). Then normalize (clears nested socials when
+    // Social Media isn't checked + trims orphan Other text — agrees
+    // with the client-side normalization in the form's save path).
+    const empty = createEmptyForm();
+    const merged = normalizeFormData({
+      contact: { ...empty.contact, ...(body.contact ?? {}) },
+      projectsNeeds: {
+        ...empty.projectsNeeds,
+        ...(body.projectsNeeds ?? {}),
+      },
+      purchasing: { ...empty.purchasing, ...(body.purchasing ?? {}) },
+      marketing: { ...empty.marketing, ...(body.marketing ?? {}) },
+      notes: body.notes ?? "",
+    });
+
     const values: InsertSubmission = {
       id: body.id!,
       schoolId: body.schoolId!,
@@ -46,12 +70,11 @@ export async function POST(req: Request) {
       repName:
         session.user.name ?? session.user.email ?? session.user.repId,
       visitDate,
-      priority: body.priority!,
-      contact: body.contact!,
-      purchasing: body.purchasing!,
-      decisionMaking: body.decisionMaking!,
-      marketing: body.marketing!,
-      notes: body.notes ?? "",
+      contact: merged.contact,
+      projectsNeeds: merged.projectsNeeds,
+      purchasing: merged.purchasing,
+      marketing: merged.marketing,
+      notes: merged.notes,
     };
 
     const inserted = await db
