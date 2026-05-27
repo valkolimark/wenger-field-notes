@@ -54,6 +54,12 @@ export interface DraftRow {
   /** Cycle 18: shape revision the draft was written against. Absent
    *  on pre-Cycle-18 drafts (purged by purgeOutdatedLocalState). */
   schemaVersion?: number;
+  /** Cycle 19: typed school name for off-list ("custom") visits. The
+   *  visit-form keeps this as separate component state (NOT inside
+   *  VisitFormData) to avoid colliding with Submission.schoolName under
+   *  the save-path spread. Optional + backward-compatible — no schema-
+   *  version bump (a v1 draft without it is still valid). */
+  customSchoolName?: string;
   updatedAt: string; // ISO
 }
 
@@ -160,6 +166,7 @@ export async function saveDraft(
   schoolId: string,
   data: VisitFormData,
   submissionId?: string,
+  customSchoolName?: string,
 ): Promise<void> {
   if (!hasBrowserDb()) return;
   try {
@@ -169,6 +176,7 @@ export async function saveDraft(
       schoolId,
       data,
       ...(submissionId ? { submissionId } : {}),
+      ...(customSchoolName !== undefined ? { customSchoolName } : {}),
       schemaVersion: DRAFT_SCHEMA_VERSION,
       updatedAt: new Date().toISOString(),
     });

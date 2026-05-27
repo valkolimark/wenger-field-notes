@@ -36,6 +36,43 @@ export const SCHOOL_TIERS = [
   "Expanded Independent + Regional Private Schools",
 ] as const;
 
+// Cycle 19: off-list ("ad-hoc") schools. A rep can log a visit for a
+// school that isn't in the 39-school dataset. A SINGLE constant
+// sentinel id is used for every off-list visit (not a per-visit uuid)
+// because:
+//   - The unique row id is still `crypto.randomUUID()` via
+//     `newSubmissionId`, so pending rows + Postgres rows never collide.
+//   - Drafts are keyed `${repId}__${schoolId}`. A constant "custom"
+//     keeps an interrupted off-list draft recoverable (the "Draft
+//     restored" banner works) — a per-visit uuid would orphan that
+//     draft forever once the uuid left the URL bar.
+// The static URL `/form/custom` reuses the existing `/form/[schoolId]`
+// dynamic route — no new route file needed.
+export const CUSTOM_SCHOOL_ID = "custom";
+
+export function isCustomSchoolId(id: string): boolean {
+  return id === CUSTOM_SCHOOL_ID;
+}
+
+/** Minimal `School` carrier for off-list visits. The form's "custom"
+ *  branch overrides the heading + contact block, so most fields here
+ *  just need to satisfy the type. lat/lng default to an LA-area
+ *  centroid (the map never renders on the form page). */
+export function makeCustomSchool(): School {
+  return {
+    id: CUSTOM_SCHOOL_ID,
+    name: "",
+    tier: "",
+    location: "",
+    enrollment: "",
+    projectActivity: "",
+    contacts: [],
+    notes: "",
+    lat: 34.05,
+    lng: -118.25,
+  };
+}
+
 export const schools: School[] = [
   {
     id: "brentwood-school-east-campus-6-12",
