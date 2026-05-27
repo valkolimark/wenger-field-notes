@@ -212,7 +212,12 @@ async function fallbackByAnyMatcher(
 // HTML/RSC of /form/* + /submissions/* sufficiently that any cached
 // pre-Cycle-18 entries should be abandoned and re-prefetched on the
 // new install. Same hygiene as the prior bumps.
-const RSC_CACHE = "next-rsc-v7";
+// Cycle 19 v7→v8 — /form/* HTML changed (the custom-mode branch added
+// a typed-name field + new header subtitle). Bump abandons pre-Cycle-19
+// cached form/RSC so install repopulates with the new HTML. Drafts +
+// pending submissions live in IndexedDB (Dexie), NOT these caches —
+// bumping cache versions never touches offline saves or the sync queue.
+const RSC_CACHE = "next-rsc-v8";
 const rscRoute: RuntimeCaching = {
   matcher: ({ request, url }) =>
     url.origin === self.location.origin &&
@@ -250,7 +255,9 @@ const rscRoute: RuntimeCaching = {
 // Cycle 18 v6→v7 paired with the RSC bump above (abandons cached
 // pre-Cycle-18 form / submission HTML so the install handler
 // repopulates with the new redesigned shell).
-const PAGES_CACHE = "pages-v7";
+// Cycle 19 v7→v8 paired with the RSC bump (custom-mode form HTML).
+// Same hygiene; no IndexedDB touched.
+const PAGES_CACHE = "pages-v8";
 const navRoute: RuntimeCaching = {
   matcher: ({ request, url }) =>
     request.mode === "navigate" &&
@@ -321,12 +328,19 @@ const SAMPLE_FORM_PATH = schools[0]
   : "/form/sample";
 const SAMPLE_SUBMISSION_DETAIL_PATH = "/submissions/__prefetch__";
 const SAMPLE_SUBMISSION_EDIT_PATH = "/submissions/__prefetch__/edit";
+// Cycle 19: explicit prefetch for the off-list form URL. The /form/*
+// prefix fallback would already serve cached SAMPLE_FORM_PATH for any
+// other /form/<id> URL — including /form/custom — but seeding the
+// static URL directly is cheap insurance so an off-list visit works
+// offline as a first-class cached route from the very first cold load.
+const CUSTOM_FORM_PATH = "/form/custom";
 const PREFETCH_NAV = [
   "/map",
   "/submissions",
   "/",
   "/account",
   SAMPLE_FORM_PATH,
+  CUSTOM_FORM_PATH,
   SAMPLE_SUBMISSION_DETAIL_PATH,
   SAMPLE_SUBMISSION_EDIT_PATH,
 ];

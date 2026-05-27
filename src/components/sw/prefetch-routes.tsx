@@ -40,6 +40,10 @@ export function PrefetchOfflineRoutes() {
           "/submissions",
           "/account",
           ...(sample ? [`/form/${sample}`] : []),
+          // Cycle 19: off-list visits. The /form/* prefix fallback
+          // would serve the sample form for /form/custom too, but
+          // an explicit cache entry avoids any first-load race.
+          "/form/custom",
           "/submissions/__prefetch__",
           "/submissions/__prefetch__/edit",
         ];
