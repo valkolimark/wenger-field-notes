@@ -2,7 +2,12 @@
 
 import { useMemo, useState } from "react";
 import dynamic from "next/dynamic";
-import { Map as MapIcon, List as ListIcon } from "lucide-react";
+import Link from "next/link";
+import {
+  Map as MapIcon,
+  List as ListIcon,
+  Plus,
+} from "lucide-react";
 import { schools as ALL_SCHOOLS, type School } from "@/lib/schools";
 import { SearchFilter, type TierFilter } from "./search-filter";
 import { SchoolPreview } from "./school-preview";
@@ -106,6 +111,17 @@ function ViewToggle({
         icon={<ListIcon size={14} aria-hidden />}
         label="List"
       />
+      {/* Cycle 19: entry point for off-list ("ad-hoc") visits. Reuses
+          the existing /form/[schoolId] route — "custom" is just a
+          value of the dynamic segment. Discreet styling: it's
+          secondary to Map/List but tappable with a thumb. */}
+      <Link
+        href="/form/custom"
+        className="ml-auto inline-flex items-center gap-1.5 rounded-full border border-dashed border-brand-navy/30 px-3 py-1 text-xs font-medium text-brand-navy/70 transition-colors duration-200 hover:border-brand-navy/60 hover:text-brand-navy"
+      >
+        <Plus size={14} aria-hidden />
+        School not listed
+      </Link>
     </div>
   );
 }
