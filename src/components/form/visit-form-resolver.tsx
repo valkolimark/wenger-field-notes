@@ -26,7 +26,11 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
-import { schools } from "@/lib/schools";
+import {
+  schools,
+  CUSTOM_SCHOOL_ID,
+  makeCustomSchool,
+} from "@/lib/schools";
 import { VisitForm } from "@/components/form/visit-form";
 import { FormSkeleton } from "@/components/ui/skeleton";
 import { FORM_SCHOOL_ID_PATH } from "@/lib/url-id";
@@ -60,6 +64,15 @@ export function VisitFormResolver() {
 
   if (schoolId === null) {
     return <FormSkeleton />;
+  }
+
+  // Cycle 19: off-list ("ad-hoc") visits. /form/custom reuses this
+  // route — the form renders with a typed-name field instead of the
+  // contacts dropdown. Handled BEFORE the dataset lookup because
+  // schools.find() would miss on "custom" and fall into the
+  // "School not found" branch.
+  if (schoolId === CUSTOM_SCHOOL_ID) {
+    return <VisitForm school={makeCustomSchool()} />;
   }
 
   const school = schools.find((s) => s.id === schoolId);

@@ -4,7 +4,7 @@ import { useEffect, useReducer, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { ArrowLeft } from "lucide-react";
 import { useLiveQuery } from "dexie-react-hooks";
-import type { School } from "@/lib/schools";
+import { type School, CUSTOM_SCHOOL_ID } from "@/lib/schools";
 import { useSession } from "next-auth/react";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/components/ui/toast";
@@ -140,6 +140,11 @@ export function VisitForm({
   // the localStorage draft system (no restore, no autosave).
   const isEdit = !!editSubmission;
 
+  // Cycle 19: off-list ("ad-hoc") visit mode. The rep typed
+  // /form/custom (or tapped "School not listed"); the contact block
+  // swaps the contacts dropdown for a "School name" text field.
+  const isCustom = school.id === CUSTOM_SCHOOL_ID;
+
   const [form, dispatch] = useReducer(
     reducer,
     editSubmission,
@@ -149,6 +154,14 @@ export function VisitForm({
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
+
+  // Cycle 19: typed school name for custom visits. NOT part of
+  // VisitFormData — that would collide with Submission.schoolName under
+  // the `...normalized` save-path spread (could wipe a listed school's
+  // name). Seeded from the submission when editing a custom row.
+  const [customSchoolName, setCustomSchoolName] = useState<string>(() =>
+    isCustom && editSubmission ? editSubmission.schoolName : "",
+  );
 
   // Cycle 13: stable submissionId so photos enqueued to Dexie before
   // save can reference a known parent across refreshes/force-quits.
@@ -176,6 +189,10 @@ export function VisitForm({
         baselineRef.current = JSON.stringify(draft.data);
         setDraftAt(draft.updatedAt);
         setSubmissionId(draft.submissionId ?? newSubmissionId(school.id));
+        // Cycle 19: restore the typed school name for off-list drafts.
+        if (isCustom && typeof draft.customSchoolName === "string") {
+          setCustomSchoolName(draft.customSchoolName);
+        }
       } else {
         setSubmissionId(newSubmissionId(school.id));
       }
@@ -198,17 +215,38 @@ export function VisitForm({
     EMPTY_PHOTOS,
   );
 
-  const isDirty = JSON.stringify(form) !== baselineRef.current;
+  // Cycle 19: typing only the school name on a new custom visit must
+  // count as dirty so the debounced autosave fires (otherwise the rep
+  // could fill the name, switch apps, come back, and find no draft).
+  const customNameDirty = isCustom && customSchoolName.length > 0;
+  const isDirty =
+    JSON.stringify(form) !== baselineRef.current || customNameDirty;
   const hasLocalPhotos = (livePhotos?.length ?? 0) > 0;
 
   // Debounced draft autosave (500ms) — new-visit only.
   useEffect(() => {
     if (isEdit || !repId || !submissionId || !isDirty || saved) return;
     const t = setTimeout(() => {
-      void saveDraft(repId, school.id, form, submissionId);
+      void saveDraft(
+        repId,
+        school.id,
+        form,
+        submissionId,
+        isCustom ? customSchoolName : undefined,
+      );
     }, 500);
     return () => clearTimeout(t);
-  }, [isEdit, form, repId, school.id, submissionId, isDirty, saved]);
+  }, [
+    isEdit,
+    form,
+    repId,
+    school.id,
+    submissionId,
+    isDirty,
+    saved,
+    isCustom,
+    customSchoolName,
+  ]);
 
   async function deleteLocalPhotosForThisSubmission() {
     if (!submissionId) return;
@@ -228,6 +266,8 @@ export function VisitForm({
     setDraftAt(null);
     setSubmissionId(newSubmissionId(school.id));
     warnedAtThresholdRef.current = false;
+    // Cycle 19: also clear the typed school name on off-list drafts.
+    if (isCustom) setCustomSchoolName("");
   }
 
   async function handleBack() {
@@ -318,6 +358,15 @@ export function VisitForm({
       );
       return;
     }
+    // Cycle 19: off-list visits MUST carry a typed school name on save
+    // (new-visit branch only — edit mode disables the field and can't
+    // change it anyway because PATCH treats schoolName as immutable).
+    // This is the only custom-only required field; the rest of the
+    // form remains "save anything" (Cycle 18 cold-call cadence).
+    if (isCustom && !isEdit && customSchoolName.trim() === "") {
+      setSaveError("Enter the school's name before saving this visit.");
+      return;
+    }
     setSaveError(null);
     setSaving(true);
 
@@ -378,10 +427,14 @@ export function VisitForm({
     }
 
     // --- New-visit branch (Cycle 12: local-first) --------------------
+    // Cycle 19: custom visits use the typed name; listed visits use the
+    // dataset name. schoolId stays as school.id (either the dataset id
+    // or the literal "custom" sentinel) — Postgres stores it as plain
+    // text either way, no schema change.
     const submission: Submission = {
       id: submissionId || newSubmissionId(school.id),
       schoolId: school.id,
-      schoolName: school.name,
+      schoolName: isCustom ? customSchoolName.trim() : school.name,
       repId,
       repName,
       visitDate: new Date().toISOString(),
@@ -434,11 +487,25 @@ export function VisitForm({
 
       <header className="mt-4">
         <h1 className="text-3xl leading-tight text-brand-navy">
-          {school.name}
+          {isCustom
+            ? customSchoolName.trim() || "New off-list visit"
+            : school.name}
         </h1>
-        <p className="mt-1 text-sm text-brand-navy/55">
-          {school.location}
-        </p>
+        {/* Cycle 19: off-list visits have no dataset location; show a
+            subtitle instead on new visits. Edit mode shows nothing
+            below the heading (the disabled name field below makes the
+            context obvious). */}
+        {isCustom ? (
+          !isEdit && (
+            <p className="mt-1 text-sm text-brand-navy/55">
+              A school that isn&apos;t on your list
+            </p>
+          )
+        ) : (
+          <p className="mt-1 text-sm text-brand-navy/55">
+            {school.location}
+          </p>
+        )}
         <p className="mt-1 text-xs text-brand-navy/40">
           {isEdit
             ? `Editing a saved visit · logged ${formatVisitDate(
@@ -463,45 +530,63 @@ export function VisitForm({
 
       {/* Cycle 18: contact-first block. NOT collapsible — it's the
           primary entry point and should be the first thing the rep
-          touches. */}
+          touches.
+          Cycle 19: in custom mode the contacts dropdown is replaced
+          with a "School name" text field (editable on new, disabled
+          on edit because PATCH treats schoolName as immutable). */}
       <section className="mt-5 rounded-2xl border border-black/8 bg-white px-4 py-5 space-y-5">
         <p className="text-xs font-semibold uppercase tracking-wide text-brand-navy/55">
           Contact
         </p>
 
-        <div>
-          <label className="block">
-            <span className="block text-sm font-medium text-brand-navy">
-              Who did you meet with?
-            </span>
-            <select
-              value={form.contact.selectedContactName}
-              onChange={(e) =>
-                dispatch({
-                  type: "contact",
-                  patch: { selectedContactName: e.target.value },
-                })
-              }
-              className="mt-1.5 h-11 w-full rounded-xl border border-black/10 bg-white px-3 text-brand-navy outline-none transition-colors focus-visible:border-brand-navy/40 focus-visible:ring-2 focus-visible:ring-brand-navy/15"
-            >
-              <option value="">
-                {school.contacts.length === 0
-                  ? "No contacts on file for this school"
-                  : "Pick a person…"}
-              </option>
-              {school.contacts.map((c) => (
-                <option key={`${c.role}-${c.name}`} value={c.name}>
-                  {c.name} — {c.role}
+        {isCustom ? (
+          <TextField
+            label="School name"
+            value={isEdit ? school.name : customSchoolName}
+            disabled={isEdit}
+            placeholder="The school's name"
+            hint={
+              isEdit
+                ? "School name can't be changed after the visit is saved."
+                : "This school isn't on your list — type its name."
+            }
+            onChange={(v) => setCustomSchoolName(v)}
+          />
+        ) : (
+          <div>
+            <label className="block">
+              <span className="block text-sm font-medium text-brand-navy">
+                Who did you meet with?
+              </span>
+              <select
+                value={form.contact.selectedContactName}
+                onChange={(e) =>
+                  dispatch({
+                    type: "contact",
+                    patch: { selectedContactName: e.target.value },
+                  })
+                }
+                className="mt-1.5 h-11 w-full rounded-xl border border-black/10 bg-white px-3 text-brand-navy outline-none transition-colors focus-visible:border-brand-navy/40 focus-visible:ring-2 focus-visible:ring-brand-navy/15"
+              >
+                <option value="">
+                  {school.contacts.length === 0
+                    ? "No contacts on file for this school"
+                    : "Pick a person…"}
                 </option>
-              ))}
-            </select>
-          </label>
-          {school.contacts.length === 0 && (
-            <p className="mt-1 text-xs text-brand-navy/45">
-              Use the &quot;Met with someone else&quot; field below.
-            </p>
-          )}
-        </div>
+                {school.contacts.map((c) => (
+                  <option key={`${c.role}-${c.name}`} value={c.name}>
+                    {c.name} — {c.role}
+                  </option>
+                ))}
+              </select>
+            </label>
+            {school.contacts.length === 0 && (
+              <p className="mt-1 text-xs text-brand-navy/45">
+                Use the &quot;Met with someone else&quot; field below.
+              </p>
+            )}
+          </div>
+        )}
 
         <TextField
           label="Email"
