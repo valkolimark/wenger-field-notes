@@ -6,6 +6,143 @@ Format: `## Cycle N — Title (YYYY-MM-DD)` followed by a short prose summary, t
 
 ---
 
+## Cycle 19 — Off-list ("ad-hoc") school visits (2026-05-27)
+
+Reps can now log a visit for a school that isn't in the 39-school
+dataset — they tap "School not listed" on /map, type the school's
+name, and fill out the full existing visit form. The submission flows
+through every existing path identically to a normal visit: offline
+draft autosave, pending sync, My Submissions, detail, edit, delete,
+admin dashboard, CSV export, and AI summaries. Just a typed name
+instead of a picked one.
+
+**Two hard constraints honored (verified):**
+- **No DB changes.** Zero schema migrations, zero data wipes. The
+  literal string `"custom"` is stored in the existing plain-text
+  `submissions.school_id` column — no new column, no new type.
+- **All offline / sync features retained.** Dexie schema versions
+  unchanged (`PENDING_SCHEMA_VERSION=2`, `DRAFT_SCHEMA_VERSION=1`),
+  `purgeOutdatedLocalState()` untouched, in-flight drafts and pending
+  rows on reps' devices survive the deploy. Adding an optional
+  `customSchoolName?: string` to `DraftRow` is backward-compatible
+  (existing drafts without it are still valid v1 drafts).
+
+**Design decision: single constant sentinel `schoolId = "custom"`,
+not per-visit uuids.**
+- Each saved submission still gets its own unique row id
+  (`crypto.randomUUID()` via `newSubmissionId`), so pending rows and
+  Postgres rows never collide.
+- Drafts are keyed `${repId}__${schoolId}`. A constant `"custom"`
+  keeps an interrupted off-list draft recoverable (the "Draft
+  restored" banner + Discard works) — a per-visit uuid would orphan
+  that draft forever once the uuid left the URL bar.
+- The static URL `/form/custom` reuses the existing
+  `/form/[schoolId]` dynamic route — no new route file. Route count
+  unchanged at 27.
+
+**Why downstream consumers needed almost no changes:** every
+submission-rendering surface already keys off the denormalized
+`schoolName` string stored on the row, not a dataset lookup. The two
+that do look up the dataset already degrade gracefully on a miss:
+- `<SubmissionDetail>` guards every `SCHOOL_BY_ID.get(...)` use with
+  `school?.…` / `{school && …}` — a custom row renders cleanly with
+  no location prefix and no School-contacts/Background blocks.
+- `<SubmissionsList>` uses a ternary on `LOCATION_BY_ID.get(...)` that
+  omits the prefix on a miss; `s.schoolName` always renders.
+- `<EditSubmission>`'s Cycle 14 stub-`School` fallback works as-is —
+  the stub's `id` is `"custom"`, which the form uses to detect custom
+  mode and re-enter the same UI in edit (with the name field
+  disabled).
+- `csv.ts`, `summarize-prompts.ts`, and the admin view all read
+  `schoolName`/`repName` straight off the row.
+
+**Added**
+- `CUSTOM_SCHOOL_ID = "custom"` + `makeCustomSchool()` +
+  `isCustomSchoolId()` in `src/lib/schools.ts`. The custom School is
+  a minimal type carrier (LA-area centroid lat/lng to satisfy the
+  type — map never renders on the form page; empty contacts/notes;
+  empty tier/location).
+- `DraftRow.customSchoolName?: string` in `src/lib/db/local.ts` —
+  the typed school name persists across reload/force-quit so an
+  interrupted off-list draft restores with the name intact.
+  `saveDraft()` gained an optional 5th param. No schema-version bump
+  (optional field is backward-compatible).
+- "School not listed" Link in `<MapScreen>`'s Map/List toggle row —
+  dashed-border pill, `Plus` icon, navigates to `/form/custom`.
+  Discreet by design (secondary to the Map/List toggle); ≥44px
+  thumb-tappable.
+
+**Changed**
+- `<VisitFormResolver>` — handles `schoolId === CUSTOM_SCHOOL_ID`
+  BEFORE the `schools.find()` lookup (which would miss on "custom"
+  and fall into "School not found"). Renders the form with
+  `makeCustomSchool()`. The Cycle 17 URL-bar logic + popstate
+  listener stay exactly as-is — the custom path is just a short-
+  circuit at the top.
+- `<VisitForm>` — main work. New `isCustom` derived from
+  `school.id === CUSTOM_SCHOOL_ID`. New `customSchoolName` component
+  state (deliberately NOT inside `VisitFormData` — the save path
+  spreads `...normalized` into the Submission, and an inner
+  `schoolName` would silently wipe `school.name` on a listed visit).
+  Seeded from `editSubmission.schoolName` when editing a custom row.
+  Draft-restore reads `draft.customSchoolName`. Dirtiness +
+  debounced autosave fire when only the name is typed. Discard draft
+  clears the name. Header shows
+  `customSchoolName.trim() || "New off-list visit"` + "A school that
+  isn't on your list" subtitle on new visits. Contact block swaps
+  the contacts dropdown for a "School name" `TextField` — editable
+  on new, disabled in edit mode (PATCH treats schoolName as
+  immutable; the disabled field with the explicit hint "School name
+  can't be changed after the visit is saved" is clearer than a
+  silently-no-op editable field). Save guard: new custom visits
+  require a non-empty trimmed name (the only custom-only validation
+  — the rest of the form stays "save anything" per Cycle 18).
+  Submission's `schoolName` set to
+  `isCustom ? customSchoolName.trim() : school.name`.
+- `src/app/sw.ts` — `PAGES_CACHE` v7→v8 and `RSC_CACHE` v7→v8.
+  /form/* HTML changed (custom-mode branch). Comment explicitly notes
+  drafts/pending live in IndexedDB, NOT these caches — bumping
+  cache versions never touches offline saves or the sync queue.
+  Install-time `PREFETCH_NAV` extended with the static
+  `/form/custom` URL so an off-list visit works offline from the
+  very first cold load (the /form/* prefix fallback would already
+  cover it, but explicit prefetch is cheap insurance against any
+  first-load race).
+- `<PrefetchOfflineRoutes>` — post-auth client→SW prefetch list
+  extended with `/form/custom` for the same reason.
+
+**Out of scope (deferred):**
+- No persistent/reusable custom-school list. Each off-list visit is
+  a standalone typed name. If the team wants reusable custom schools
+  later (e.g. a new school added between dataset refreshes), that's a
+  future cycle.
+- No DB schema change. No new dependencies. No changes to auth,
+  admin gating, photo upload, or `/api/summarize`.
+- CLAUDE.md's Cycle plan should gain a Cycle 19 entry — left to the
+  user to add (this cycle's brief explicitly said not to edit
+  CLAUDE.md without approval).
+
+**Notes / verification**
+- Zero new dependencies, zero env vars, zero schema migrations,
+  zero database touches.
+- `npx tsc --noEmit` clean. `npm run build` clean — **27 routes,
+  same as Cycle 18** (`/form/custom` reuses the existing
+  `/form/[schoolId]` dynamic route). Built `public/sw.js` carries
+  `pages-v8`, `next-rsc-v8`, and `/form/custom` (verified inline).
+- **Team's portion of the live check:** open /map → "School not
+  listed" → /form/custom opens with the School name field as the
+  first input. Save with an empty name → inline "Enter the school's
+  name…" error, no submission created. Type a name + fill some
+  fields + Save → appears in My Submissions with the typed name;
+  opens in detail (no location prefix, no School-contacts/Background
+  blocks — clean degradation); Edit shows the name read-only and
+  saves other changes; Delete works. Offline: airplane mode → start
+  an off-list visit → autosave fires → reload → typed name + form
+  state restore → Save → "Pending sync" row → reconnect → drains to
+  the server → flips to synced. A normal listed-school visit still
+  works identically (no regression).
+- Live: https://valkolimark-wenger-field-notes.vercel.app
+
 ## Cycle 18 — Brooke's visit-form redesign (2026-05-22)
 
 Brooke's deferred form redesign lands — contact-first layout,
